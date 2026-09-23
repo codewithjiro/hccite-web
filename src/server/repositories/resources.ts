@@ -51,6 +51,12 @@ export async function upsertDiscoveryResource(input: unknown) {
   const incoming = normalizedResourceSchema.parse(input);
   const db = getDb();
   const keys = identifiers(incoming);
+  return db.transaction(async (tx) => {
+  // Equivalent ISBN-10 and ISBN-13 values do not collide in the single-column
+  // unique index. Serialize their identity lookup and insert on one canonical key.
+  if (incoming.type === "book" && keys.isbn13) {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`hccite:isbn:${keys.isbn13}`}, 0))`);
+  }
   const conditions = [];
   const providerId = incoming.sourceIdentifier ? and(eq(resources.source, incoming.source), eq(resources.sourceIdentifier, incoming.sourceIdentifier)) : null;
   const addDoi = () => { if (keys.doi) conditions.push(sql`lower(regexp_replace(regexp_replace(${resources.doi}, '^doi:\\s*', '', 'i'), '^https?://(dx\\.)?doi\\.org/', '', 'i')) = ${keys.doi}`); };
@@ -66,13 +72,13 @@ export async function upsertDiscoveryResource(input: unknown) {
   }
   let existing: typeof resources.$inferSelect | undefined;
   for (const condition of conditions) {
-    const [found] = await db.select().from(resources).where(condition).limit(1);
+    const [found] = await tx.select().from(resources).where(condition).limit(1);
     if (found) { existing = found; break; }
   }
 
   let ambiguous: Array<typeof resources.$inferSelect> = [];
   if (!existing && incoming.year && incoming.authors[0]) {
-    const candidates = await db.select().from(resources).where(and(eq(resources.type, incoming.type), eq(resources.year, incoming.year))).limit(5000);
+    const candidates = await tx.select().from(resources).where(and(eq(resources.type, incoming.type), eq(resources.year, incoming.year))).limit(5000);
     const matched = conservativeTitleCandidates(incoming, candidates);
     existing = matched.match ?? undefined;
     ambiguous = matched.ambiguous;
@@ -80,22 +86,23 @@ export async function upsertDiscoveryResource(input: unknown) {
 
   if (existing) {
     const merged = mergeNormalizedResources(asNormalized(existing), incoming);
-    const [updated] = await db.update(resources).set({ ...merged, updatedAt: new Date() }).where(eq(resources.id, existing.id)).returning();
+    const [updated] = await tx.update(resources).set({ ...merged, updatedAt: new Date() }).where(eq(resources.id, existing.id)).returning();
     return { resource: updated ?? existing, reused: true, ambiguous: false };
   }
 
   try {
-    const [created] = await db.insert(resources).values(incoming).returning();
+    const [created] = await tx.transaction(async (nested) => nested.insert(resources).values(incoming).returning());
     return { resource: created!, reused: false, ambiguous: ambiguous.length > 0 };
   } catch (error) {
     // A simultaneous request can win a unique DOI/ISBN/provider-ID index after the lookup.
     if (!error || typeof error !== "object" || !("code" in error) || error.code !== "23505") throw error;
-    const [raced] = conditions.length ? await db.select().from(resources).where(or(...conditions)).limit(1) : [];
+    const [raced] = conditions.length ? await tx.select().from(resources).where(or(...conditions)).limit(1) : [];
     if (!raced) throw error;
     const merged = mergeNormalizedResources(asNormalized(raced), incoming);
-    const [updated] = await db.update(resources).set({ ...merged, updatedAt: new Date() }).where(eq(resources.id, raced.id)).returning();
+    const [updated] = await tx.update(resources).set({ ...merged, updatedAt: new Date() }).where(eq(resources.id, raced.id)).returning();
     return { resource: updated ?? raced, reused: true, ambiguous: false };
   }
+  });
 }
 
 export async function getResource(resourceId: string) {

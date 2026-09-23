@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { isbn10FromIsbn13, isbn13FromIsbn10, mergeNormalizedResources, normalizeDoi, normalizeIsbn, normalizedResourceSchema, conservativeTitleCandidates } from "../src/server/discovery/normalization.ts";
-import { searchOpenAlex } from "../src/server/discovery/providers/openalex.ts";
+import { getOpenAlexWorkById, searchOpenAlex } from "../src/server/discovery/providers/openalex.ts";
 import { lookupCrossrefDoi, normalizeDoiInput, searchCrossrefTitle } from "../src/server/discovery/providers/crossref.ts";
-import { searchGoogleBooks } from "../src/server/discovery/providers/google-books.ts";
+import { getGoogleBookById, searchGoogleBooks } from "../src/server/discovery/providers/google-books.ts";
 import { ProviderError } from "../src/server/discovery/providers/shared.ts";
+import { discoverySaveLocatorSchema } from "../src/server/discovery/locator.ts";
+import { saveDiscoveredResource } from "../src/server/discovery/save.ts";
 
 test("normalizes equivalent DOI forms and rejects invalid identifiers", () => {
   const variants = ["10.5555/example", "doi:10.5555/example", "https://doi.org/10.5555/example", "HTTP://DX.DOI.ORG/10.5555/EXAMPLE"];
@@ -84,4 +86,76 @@ test("Google Books handles empty and sparse records, validates URLs, and surface
   await assert.rejects(searchGoogleBooks("book", 0, { apiKey: "", fetcher: async () => new Response("{}") }), (error) => error.code === "missing_credentials");
   await assert.rejects(searchGoogleBooks("book", 0, { apiKey: "fixture-only", fetcher: async () => new Response('{"error":{"errors":[{"reason":"quotaExceeded"}]}}', { status: 403 }) }), (error) => error.code === "quota_exhausted");
   await assert.rejects(searchGoogleBooks("book", 0, { apiKey: "fixture-only", fetcher: async () => new Response("{}", { status: 503 }) }), (error) => error.code === "provider_outage");
+});
+
+test("discovery save accepts only strict, safe provider locators", () => {
+  const valid = [
+    { provider: "openalex", providerIdentifier: "W123" },
+    { provider: "crossref", providerIdentifier: "10.5555/example" },
+    { provider: "google_books", providerIdentifier: "book_123-A" },
+  ];
+  for (const locator of valid) assert.equal(discoverySaveLocatorSchema.safeParse(locator).success, true);
+  for (const locator of [
+    { ...valid[1], title: "FAKE TITLE", authors: ["Fake Author"] },
+    { provider: "manual", providerIdentifier: "anything" },
+    { provider: "openalex", providerIdentifier: "https://evil.example/W123" },
+    { provider: "crossref", providerIdentifier: "not-a-doi" },
+    { provider: "google_books", providerIdentifier: "../unsafe?key=x" },
+  ]) assert.equal(discoverySaveLocatorSchema.safeParse(locator).success, false);
+});
+
+test("exact provider re-fetch validates identity and metadata without client bibliographic fields", async () => {
+  const openAlexWork = { id: "https://openalex.org/W123", display_name: "True OpenAlex title", authorships: [], publication_year: 2022 };
+  const openalexFetcher = async (input) => {
+    assert.equal(new URL(input).origin, "https://api.openalex.org");
+    assert.equal(new URL(input).pathname, "/works/W123");
+    return new Response(JSON.stringify(openAlexWork));
+  };
+  const search = await searchOpenAlex("True", 1, { apiKey: "fixture", fetcher: async () => new Response(JSON.stringify({ meta: { count: 1 }, results: [openAlexWork] })) });
+  const openalex = await getOpenAlexWorkById(search.items[0].sourceIdentifier, { apiKey: "fixture", fetcher: openalexFetcher });
+  assert.equal(openalex.title, search.items[0].title);
+  const crossref = await lookupCrossrefDoi("10.5555/example", { mailto: "fixture@example.org", fetcher: async (input) => {
+    assert.equal(new URL(input).origin, "https://api.crossref.org");
+    return new Response(JSON.stringify({ message: { DOI: "10.5555/EXAMPLE", title: ["True Crossref title"], author: [{ name: "True Author" }] } }));
+  } });
+  assert.equal(crossref.resource.title, "True Crossref title");
+  const book = { id: "book_123-A", volumeInfo: { title: "True book title", authors: ["True Book Author"] } };
+  const books = await searchGoogleBooks("True", 0, { apiKey: "fixture", fetcher: async () => new Response(JSON.stringify({ totalItems: 1, items: [book] })) });
+  const googleBook = await getGoogleBookById(books.items[0].sourceIdentifier, { apiKey: "fixture", fetcher: async (input) => {
+    assert.equal(new URL(input).origin, "https://www.googleapis.com");
+    assert.equal(new URL(input).pathname, "/books/v1/volumes/book_123-A");
+    return new Response(JSON.stringify(book));
+  } });
+  assert.equal(googleBook.title, books.items[0].title);
+  for (const operation of [
+    () => getOpenAlexWorkById("W123", { apiKey: "fixture", fetcher: async () => new Response("{}") }),
+    () => getGoogleBookById("book_123-A", { apiKey: "fixture", fetcher: async () => new Response("{}") }),
+    () => lookupCrossrefDoi("10.5555/example", { mailto: "fixture@example.org", fetcher: async () => new Response(JSON.stringify({ message: { DOI: "10.5555/other", title: ["Wrong"] } })) }),
+  ]) await assert.rejects(operation, (error) => error.code === "malformed_response");
+  await assert.rejects(getOpenAlexWorkById("W123", { apiKey: "", fetcher: openalexFetcher }), (error) => error.code === "missing_credentials");
+  await assert.rejects(getGoogleBookById("book_123-A", { apiKey: "", fetcher: async () => new Response(JSON.stringify(book)) }), (error) => error.code === "missing_credentials");
+  await assert.rejects(getOpenAlexWorkById("W123", { apiKey: "fixture", fetcher: async () => new Response("{}", { status: 503 }) }), (error) => error.code === "provider_outage");
+});
+
+test("save service persists only provider-refetched metadata and makes no writes on provider failure", async () => {
+  const authoritative = resource({ source: "crossref", sourceIdentifier: "10.5555/example", doi: "10.5555/example", title: "True provider title", authors: ["True Author"] });
+  const writes = [];
+  const dependencies = {
+    openalex: async () => assert.fail("wrong provider"),
+    crossref: async () => ({ resource: authoritative }),
+    googleBooks: async () => assert.fail("wrong provider"),
+    upsert: async (value) => { writes.push(value); return { resource: { ...value, id: "canonical-id" }, reused: false, ambiguous: false }; },
+    save: async (value) => { writes.push(value); return { id: "saved-id" }; },
+  };
+  await assert.rejects(saveDiscoveredResource({ provider: "crossref", providerIdentifier: "10.5555/example", title: "FAKE TITLE" }, dependencies));
+  assert.equal(writes.length, 0);
+  const saved = await saveDiscoveredResource({ provider: "crossref", providerIdentifier: "10.5555/example" }, dependencies);
+  assert.equal(saved.saved, true);
+  assert.equal(writes[0].title, "True provider title");
+  assert.deepEqual(writes[0].authors, ["True Author"]);
+  assert.deepEqual(writes[1], { resourceId: "canonical-id" });
+  writes.length = 0;
+  dependencies.crossref = async () => { throw new ProviderError("crossref", "provider_outage", "Unavailable", true); };
+  await assert.rejects(saveDiscoveredResource({ provider: "crossref", providerIdentifier: "10.5555/example" }, dependencies), (error) => error.code === "provider_outage");
+  assert.equal(writes.length, 0);
 });

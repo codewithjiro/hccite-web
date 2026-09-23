@@ -75,9 +75,11 @@ export function DiscoveryWorkspace({ kind }: { kind: DiscoveryKind }) {
   async function save(resource: NormalizedResource) {
     setStatus("");
     try {
-      const response = await fetch("/api/resources/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(resource) });
-      const payload = await response.json() as { saved?: boolean; reused?: boolean; ambiguous?: boolean; error?: string };
-      if (!response.ok) throw new Error(payload.error ?? "Could not save this resource.");
+      const providerIdentifier = resource.source === "crossref" ? resource.doi : resource.sourceIdentifier;
+      if (!providerIdentifier || resource.source === "manual") throw new Error("This provider record has no stable ID and cannot be saved.");
+      const response = await fetch("/api/resources/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: resource.source, providerIdentifier }) });
+      const payload = await response.json() as { saved?: boolean; reused?: boolean; ambiguous?: boolean; error?: string | ProviderError };
+      if (!response.ok) throw new Error(typeof payload.error === "object" ? payload.error.message : payload.error ?? "Could not save this resource.");
       setStatus(payload.ambiguous
         ? "This was saved separately because similar records are ambiguous; no automatic merge was made."
         : payload.reused ? "The canonical Resource was reused and saved to your library." : "Resource saved to your library.");
@@ -139,6 +141,7 @@ function ResultCard({ resource, onSave }: { resource: NormalizedResource; onSave
   const coverImageUrl = typeof cover === "string" ? cover : null;
   const doiUrl = resource.doi ? `https://doi.org/${resource.doi}` : null;
   const sourceUrl = resource.url;
+  const canSave = resource.source !== "manual" && !!(resource.source === "crossref" ? resource.doi : resource.sourceIdentifier);
   return <article className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
     <div className="flex flex-col gap-4 p-5 sm:flex-row sm:p-6">
       {resource.type === "book" && <div className="flex size-28 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted sm:size-32">{coverImageUrl ? <Image src={coverImageUrl} alt={`Cover for ${resource.title}`} width={128} height={160} unoptimized className="h-full w-full object-cover" /> : <BookOpen aria-hidden="true" className="size-9 text-muted-foreground" />}</div>}
@@ -151,7 +154,7 @@ function ResultCard({ resource, onSave }: { resource: NormalizedResource; onSave
         {resource.isbn && <p className="mt-1 break-all text-sm"><span className="text-muted-foreground">ISBN: </span>{resource.isbn}</p>}
         {resource.abstract && <p className="mt-3 line-clamp-5 whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">{resource.abstract}</p>}
         <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" onClick={() => onSave(resource)} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-3.5 text-sm font-semibold text-primary-foreground hover:opacity-90"><Save aria-hidden="true" className="size-4" />Save to library</button>
+          {canSave ? <button type="button" onClick={() => onSave(resource)} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-3.5 text-sm font-semibold text-primary-foreground hover:opacity-90"><Save aria-hidden="true" className="size-4" />Save to library</button> : <span className="text-xs text-muted-foreground">Provider record has no stable ID for saving.</span>}
           {doiUrl && <a href={doiUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-border px-3.5 text-sm font-semibold hover:bg-muted">DOI <ArrowUpRight aria-hidden="true" className="size-4" /></a>}
           {sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-border px-3.5 text-sm font-semibold hover:bg-muted">Source record <ArrowUpRight aria-hidden="true" className="size-4" /></a>}
           {typeof metaValue(resource, "previewUrl") === "string" && <a href={String(metaValue(resource, "previewUrl"))} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-border px-3.5 text-sm font-semibold hover:bg-muted">Preview <ArrowUpRight aria-hidden="true" className="size-4" /></a>}

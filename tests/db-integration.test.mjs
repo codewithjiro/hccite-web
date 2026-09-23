@@ -8,6 +8,7 @@ import * as collectionsRepo from "../src/server/repositories/collections.ts";
 import * as resourcesRepo from "../src/server/repositories/resources.ts";
 import * as studiesRepo from "../src/server/repositories/studies.ts";
 import * as rrlRepo from "../src/server/repositories/rrl.ts";
+import { saveDiscoveredResource } from "../src/server/discovery/save.ts";
 
 const userA = "hccite-phase03-synthetic-user-a";
 const userB = "hccite-phase03-synthetic-user-b";
@@ -24,7 +25,7 @@ test("Phase 03 repository ownership, constraints, cascades, and live schema", as
   try {
     // Always start from a clean, clearly synthetic namespace in case a previous run was interrupted.
     await client`delete from public.hccite_user_profile where clerk_user_id in (${userA}, ${userB}, ${userC})`;
-    await client`delete from public.hccite_resource where source_identifier like ${fixtureToken + "%"} or doi = '10.5555/hccite-phase04.shared' or source_identifier = 'W-hccite-phase04-ambiguous'`;
+    await client`delete from public.hccite_resource where source_identifier like ${fixtureToken + "%"} or doi in ('10.5555/hccite-phase04.shared', '10.5555/hccite-phase04.poison') or source_identifier = 'W-hccite-phase04-ambiguous'`;
 
     setTestIdentity(userA);
     const collectionA = await collectionsRepo.createCollection({ name: "Synthetic A collection", description: "Phase 03 test fixture" });
@@ -56,6 +57,38 @@ test("Phase 03 repository ownership, constraints, cascades, and live schema", as
     assert.equal(discoveredCrossref.resource.abstract, "Richer provider abstract.");
     assert.equal(discoveredCrossref.resource.source, "openalex", "the canonical record keeps its primary provenance");
     assert.equal(discoveredCrossref.resource.citationMetadata.provenance.length, 2);
+
+    const bookInput = (isbn, suffix) => ({
+      type: "book", title: "Synthetic equivalent ISBN identity test", authors: ["Synthetic Book Author"], year: 2021,
+      publicationDate: "2021", doi: null, isbn, publisher: "Synthetic Press", venue: null,
+      source: "google_books", sourceIdentifier: `${fixtureToken}-book-${suffix}`,
+      url: "https://books.google.com/", abstract: null, retrievedAt: new Date(), citationMetadata: {},
+    });
+    const [book10, book13] = await Promise.all([
+      resourcesRepo.upsertDiscoveryResource(bookInput("0306406152", "isbn10")),
+      resourcesRepo.upsertDiscoveryResource(bookInput("9780306406157", "isbn13")),
+    ]);
+    assert.equal(book10.resource.id, book13.resource.id, "concurrent ISBN-10 and equivalent ISBN-13 saves must reuse one canonical Resource");
+    assert.equal([book10.reused, book13.reused].filter(Boolean).length, 1);
+
+    const trueMetadata = {
+      ...bookInput(null, "unused"), type: "article", title: "Authoritative Crossref fixture", authors: ["Real Fixture Author"],
+      year: 2023, doi: "10.5555/hccite-phase04.poison", isbn: null, source: "crossref",
+      sourceIdentifier: "10.5555/hccite-phase04.poison", citationMetadata: { provider: "crossref" },
+    };
+    const saveDependencies = {
+      openalex: async () => assert.fail("wrong provider"),
+      crossref: async () => ({ resource: trueMetadata }),
+      googleBooks: async () => assert.fail("wrong provider"),
+      upsert: resourcesRepo.upsertDiscoveryResource,
+      save: resourcesRepo.saveResource,
+    };
+    await assert.rejects(saveDiscoveredResource({ provider: "crossref", providerIdentifier: trueMetadata.doi, title: "FAKE TITLE", authors: ["Fake Author"] }, saveDependencies));
+    assert.equal((await client`select count(*)::int as count from public.hccite_resource where doi = ${trueMetadata.doi}`)[0].count, 0);
+    const savedFromProvider = await saveDiscoveredResource({ provider: "crossref", providerIdentifier: trueMetadata.doi }, saveDependencies);
+    const [canonicalFromProvider] = await client`select title, authors from public.hccite_resource where id = ${savedFromProvider.resource.id}`;
+    assert.equal(canonicalFromProvider.title, "Authoritative Crossref fixture");
+    assert.deepEqual(canonicalFromProvider.authors, ["Real Fixture Author"]);
 
     for (const suffix of ["one", "two"]) await resourcesRepo.createResource({
       type: "article", title: "Synthetic ambiguous title fallback", authors: ["Synthetic Fallback Author"], year: 2020,
@@ -197,7 +230,7 @@ test("Phase 03 repository ownership, constraints, cascades, and live schema", as
     assert.deepEqual(liveTables.map((row) => row.table_name), expectedTables);
   } finally {
     await client`delete from public.hccite_user_profile where clerk_user_id in (${userA}, ${userB}, ${userC})`;
-    await client`delete from public.hccite_resource where source_identifier like ${fixtureToken + "%"} or doi in ('10.5555/hccite-phase03.synthetic', '10.5555/hccite-phase04.shared') or source_identifier = 'W-hccite-phase04-ambiguous'`;
+    await client`delete from public.hccite_resource where source_identifier like ${fixtureToken + "%"} or doi in ('10.5555/hccite-phase03.synthetic', '10.5555/hccite-phase04.shared', '10.5555/hccite-phase04.poison') or source_identifier = 'W-hccite-phase04-ambiguous'`;
     await client.end();
     await closeDb();
   }

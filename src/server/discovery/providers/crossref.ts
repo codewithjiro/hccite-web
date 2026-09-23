@@ -43,8 +43,10 @@ export async function lookupCrossrefDoi(input: string, options: { fetcher?: type
   const payload = await providerJson<unknown>("crossref", url, { "User-Agent": `HCCite/0.1 (mailto:${mailto})` }, options.fetcher);
   const parsed = itemEnvelope.safeParse(payload);
   if (!parsed.success) throw new ProviderError("crossref", "malformed_response", "Crossref response did not match the expected work format.");
-  const resource = safeMap(parsed.data.message, new Date());
-  if (!resource.title) throw new ProviderError("crossref", "malformed_response", "Crossref record is missing a usable title.");
+  if (normalizeDoi(parsed.data.message.DOI) !== doi) throw new ProviderError("crossref", "malformed_response", "Crossref returned a different DOI.");
+  let resource: NormalizedResource;
+  try { resource = safeMap(parsed.data.message, new Date()); }
+  catch { throw new ProviderError("crossref", "malformed_response", "Crossref record is missing usable metadata."); }
   return { resource, doiFound: true, verification: "unknown" as const };
 }
 

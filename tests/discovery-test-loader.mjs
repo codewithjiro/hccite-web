@@ -7,6 +7,8 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier === "server-only") return { url: "data:text/javascript,export%20{}", shortCircuit: true };
+    if (specifier === "@clerk/nextjs/server") return { url: pathToFileURL(resolve(root, "tests/db-test-clerk.mjs")).href, shortCircuit: true };
+    if (specifier === "next/navigation") return { url: pathToFileURL(resolve(root, "tests/db-test-navigation.mjs")).href, shortCircuit: true };
     let target = specifier.startsWith("~/") ? resolve(root, "src", specifier.slice(2)) : null;
     if (target) {
       if (!extname(target) && existsSync(`${target}.ts`)) target += ".ts";

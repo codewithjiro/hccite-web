@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { env } from "~/env";
 import { normalizeDoi, normalizedResourceSchema, safelyRenderUrl, type NormalizedResource } from "~/server/discovery/normalization";
+import { openAlexWorkIdSchema } from "~/server/discovery/locator";
 import { ProviderError, providerJson } from "./shared";
 
 const openAlexWorkSchema = z.object({
@@ -25,7 +26,7 @@ function reconstructAbstract(index: Record<string, number[]> | null | undefined)
 }
 
 function mapWork(work: z.infer<typeof openAlexWorkSchema>, retrievedAt: Date): NormalizedResource {
-  const id = work.id.split("/").pop()!;
+  const id = openAlexWorkIdSchema.safeParse(work.id.replace(/^https:\/\/openalex\.org\//i, "")).data ?? null;
   const url = safelyRenderUrl(work.primary_location?.landing_page_url) ?? safelyRenderUrl(work.doi) ?? safelyRenderUrl(work.id);
   return normalizedResourceSchema.parse({
     type: work.type === "book" ? "book" : "article", title: work.display_name,
@@ -35,6 +36,23 @@ function mapWork(work: z.infer<typeof openAlexWorkSchema>, retrievedAt: Date): N
     source: "openalex", sourceIdentifier: id, url, abstract: reconstructAbstract(work.abstract_inverted_index), retrievedAt,
     citationMetadata: { provider: "openalex", openAlexId: id, openAccess: work.open_access ? { isOpenAccess: work.open_access.is_oa, url: safelyRenderUrl(work.open_access.oa_url), repositoryHasFullText: work.open_access.any_repository_has_fulltext ?? null } : null },
   });
+}
+
+export async function getOpenAlexWorkById(input: string, options: { fetcher?: typeof fetch; apiKey?: string } = {}) {
+  const parsedId = openAlexWorkIdSchema.safeParse(input);
+  if (!parsedId.success) throw new ProviderError("openalex", "invalid_input", "Enter a valid OpenAlex work ID.");
+  const apiKey = options.apiKey ?? env.OPENALEX_API_KEY;
+  if (!apiKey) throw new ProviderError("openalex", "missing_credentials", "OpenAlex API key is not configured.");
+  const url = new URL(`https://api.openalex.org/works/${parsedId.data}`);
+  url.searchParams.set("api_key", apiKey);
+  const payload = await providerJson<unknown>("openalex", url, undefined, options.fetcher);
+  const work = openAlexWorkSchema.safeParse(payload);
+  if (!work.success) throw new ProviderError("openalex", "malformed_response", "OpenAlex response did not match the expected work format.");
+  let resource: NormalizedResource;
+  try { resource = mapWork(work.data, new Date()); }
+  catch { throw new ProviderError("openalex", "malformed_response", "OpenAlex work has unusable metadata."); }
+  if (resource.sourceIdentifier !== parsedId.data) throw new ProviderError("openalex", "malformed_response", "OpenAlex returned a different work ID.");
+  return resource;
 }
 
 export async function searchOpenAlex(query: string, page: number, options: { fetcher?: typeof fetch; apiKey?: string; yearFrom?: number; openAccess?: boolean } = {}) {
