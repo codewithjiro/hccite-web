@@ -59,7 +59,7 @@ export const resources = createTable("resource", {
   citationMetadata: jsonb("citation_metadata").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
   ...timestamps(),
 }, (table) => [
-  uniqueIndex("hccite_resource_doi_normalized_uq").on(sql`lower(regexp_replace(${table.doi}, '^https?://(dx\\.)?doi\\.org/', '', 'i'))`).where(sql`${table.doi} is not null`),
+  uniqueIndex("hccite_resource_doi_normalized_uq").on(sql`lower(regexp_replace(regexp_replace(${table.doi}, '^doi:\\s*', '', 'i'), '^https?://(dx\\.)?doi\\.org/', '', 'i'))`).where(sql`${table.doi} is not null`),
   uniqueIndex("hccite_resource_isbn_normalized_uq").on(sql`regexp_replace(${table.isbn}, '[^0-9Xx]', '', 'g')`).where(sql`${table.isbn} is not null`),
   uniqueIndex("hccite_resource_provider_identifier_uq").on(table.source, table.sourceIdentifier).where(sql`${table.sourceIdentifier} is not null`),
   index("hccite_resource_title_year_idx").on(table.title, table.year),

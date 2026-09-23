@@ -14,6 +14,7 @@
     "preview": "next build && next start",
     "start": "next start",
     "test:auth": "node --experimental-strip-types --test tests/auth-boundary.test.mjs",
+    "test:db": "node --experimental-strip-types --import ./tests/db-test-loader.mjs --test tests/db-integration.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

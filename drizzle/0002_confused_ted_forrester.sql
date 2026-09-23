@@ -1,0 +1,2 @@
+DROP INDEX "hccite_resource_doi_normalized_uq";--> statement-breakpoint
+CREATE UNIQUE INDEX "hccite_resource_doi_normalized_uq" ON "hccite_resource" USING btree (lower(regexp_replace(regexp_replace("doi", '^doi:\s*', '', 'i'), '^https?://(dx\.)?doi\.org/', '', 'i'))) WHERE "hccite_resource"."doi" is not null;

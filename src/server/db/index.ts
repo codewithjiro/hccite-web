@@ -19,3 +19,12 @@ export function getDb() {
   if (process.env.NODE_ENV !== "production") globalForDb.conn = conn;
   return drizzle(conn, { schema });
 }
+
+/** Close the cached connection when a short-lived integration-test process exits. */
+export async function closeDb() {
+  const conn = globalForDb.conn;
+  if (conn) {
+    globalForDb.conn = undefined;
+    await conn.end();
+  }
+}

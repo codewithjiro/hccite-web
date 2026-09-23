@@ -14,7 +14,7 @@ Phase 03 needs PostgreSQL 14 or newer. Install/run PostgreSQL locally or use a P
 
 Run `pnpm db:generate` to generate a migration from the checked-in schema; schema generation does not need a running database. Run `pnpm db:migrate` to apply checked-in migrations to the database named by `DATABASE_URL`. `pnpm db:push` is available for disposable local schema experiments, but migrations are the reproducible setup path. `pnpm db:studio` opens Drizzle Studio against the configured database.
 
-The migration creates the `hccite_*` tables, enum types, indexes, constraints, and foreign keys in PostgreSQL's `public` schema. There are no seed records: the app does not fabricate bibliographic or academic data. Future tests may use clearly labelled fixtures in an isolated test database.
+The migrations create the `hccite_*` tables, enum types, indexes, constraints, and foreign keys in PostgreSQL's `public` schema. There are no seed records: the app does not fabricate bibliographic or academic data. `pnpm test:db` runs the focused Phase 03 repository and constraint integration suite against the configured `DATABASE_URL` (or the local Vercel environment file); it uses clearly labelled synthetic fixtures and cleans them up afterward. Use a database you control for this command.
 
 To rebuild a disposable local database from scratch, stop the app, drop and recreate only the dedicated `hccite` database using your local PostgreSQL tools, then run `pnpm db:migrate`. PostgreSQL has no automatic down migration generated here; preserve any data you need before rebuilding. Do not run reset/drop commands against a shared or production database. Drizzle's generated SQL and journal are kept under `drizzle/`; applied migration state is recorded in the database.
 
@@ -38,4 +38,4 @@ Phase 03 repositories call `getCurrentUserProfile()` in `src/server/repositories
 
 ## Checks
 
-Run `pnpm test:auth`, `pnpm lint`, `pnpm typecheck`, and `pnpm build`. For database setup, run `pnpm db:generate` and `pnpm db:migrate`; live migration checks need a configured PostgreSQL `DATABASE_URL`. Other credentials listed in `.env.example` are for later phases.
+Run `pnpm test:auth`, `pnpm test:db`, `pnpm lint`, `pnpm typecheck`, and `pnpm build`. For database setup, run `pnpm db:generate` and `pnpm db:migrate`; live migration checks need a configured PostgreSQL `DATABASE_URL`. Other credentials listed in `.env.example` are for later phases.
