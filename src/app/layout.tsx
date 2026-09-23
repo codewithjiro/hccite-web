@@ -3,6 +3,7 @@ import "~/styles/globals.css";
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { ThemeProvider } from "~/components/theme-provider";
+import { env } from "~/env";
 
 export const metadata: Metadata = {
   title: {
@@ -23,10 +24,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           {clerkConfigured ? (
             <ClerkProvider
-              signInUrl="/sign-in"
-              signUpUrl="/sign-up"
-              signInFallbackRedirectUrl="/dashboard"
-              signUpFallbackRedirectUrl="/dashboard"
+              signInUrl={env.NEXT_PUBLIC_CLERK_SIGN_IN_URL}
+              signUpUrl={env.NEXT_PUBLIC_CLERK_SIGN_UP_URL}
+              signInFallbackRedirectUrl={env.NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL}
+              signUpFallbackRedirectUrl={env.NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL}
             >
               {children}
             </ClerkProvider>

@@ -5,13 +5,35 @@ import { isRecordOwner } from "../src/lib/ownership.ts";
 
 test("private route matching includes nested study and API paths", () => {
   for (const path of [
-    "/dashboard", "/studies/abc/analysis", "/studies/abc/literature",
-    "/studies/abc/rrl", "/collections", "/profile/security", "/api/private-action",
+    "/dashboard",
+    "/research-articles",
+    "/doi-lookup",
+    "/books",
+    "/ai-analyzer",
+    "/studies",
+    "/studies/abc/analysis",
+    "/studies/abc/literature",
+    "/studies/abc/rrl",
+    "/collections",
+    "/profile",
+    "/profile/security",
+    "/api",
+    "/api/private-action",
   ]) assert.equal(isPrivatePath(path), true, path);
 });
 
 test("landing, auth, assets, and lookalike path segments stay public", () => {
-  for (const path of ["/", "/sign-in", "/sign-in/factor-one", "/sign-up", "/assets/hero.png", "/studies-guide"]) {
+  for (const path of [
+    "/",
+    "/sign-in",
+    "/sign-in/factor-one",
+    "/sign-up",
+    "/sign-up/verify-email-address",
+    "/assets",
+    "/assets/hero.png",
+    "/assets/app_logo.jpg",
+    "/studies-guide",
+  ]) {
     assert.equal(isPrivatePath(path), false, path);
   }
 });
