@@ -1,10 +1,10 @@
 import "server-only";
 
-import { and, eq, desc, or, sql } from "drizzle-orm";
+import { and, eq, desc, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireOwnedRecord } from "~/server/auth";
 import { getDb } from "~/server/db";
-import { resources, savedResources } from "~/server/db/schema";
+import { collectionResources, collections, resources, savedResources } from "~/server/db/schema";
 import { getCurrentUserProfile } from "./profiles";
 import { conservativeTitleCandidates, isbn10FromIsbn13, isbn13FromIsbn10, mergeNormalizedResources, normalizeDoi, normalizeIsbn, normalizedResourceSchema, type NormalizedResource } from "~/server/discovery/normalization";
 
@@ -22,7 +22,7 @@ export const resourceInputSchema = z.object({
   citationMetadata: z.record(z.string(), z.unknown()).default({}),
 });
 export const saveResourceInputSchema = z.object({ resourceId: z.string().uuid() });
-export const savedResourceUpdateSchema = z.object({ readingStatus: z.enum(["unread", "reading", "read"]).optional(), notes: z.string().max(50000).nullable().optional() }).refine((v) => Object.keys(v).length > 0);
+export const savedResourceUpdateSchema = z.object({ readingStatus: z.enum(["unread", "reading", "read"]).optional(), notes: z.string().trim().max(10000).nullable().optional() }).strict().refine((v) => Object.keys(v).length > 0);
 
 /** Public normalized metadata may be shared across users. */
 export async function createResource(input: unknown) {
@@ -147,5 +147,9 @@ export async function removeSavedResource(savedResourceId: string) {
   const db = getDb();
   const [row] = await db.select().from(savedResources).where(and(eq(savedResources.id, id), eq(savedResources.userId, profile.id))).limit(1);
   const owned = requireOwnedRecord(row, profile.id);
-  await db.delete(savedResources).where(and(eq(savedResources.id, owned.id), eq(savedResources.userId, profile.id)));
+  await db.transaction(async (tx) => {
+    const ownCollections = tx.select({ id: collections.id }).from(collections).where(eq(collections.userId, profile.id));
+    await tx.delete(collectionResources).where(and(eq(collectionResources.resourceId, owned.resourceId), inArray(collectionResources.collectionId, ownCollections)));
+    await tx.delete(savedResources).where(and(eq(savedResources.id, owned.id), eq(savedResources.userId, profile.id)));
+  });
 }

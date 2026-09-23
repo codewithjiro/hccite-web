@@ -101,8 +101,14 @@ test("Phase 03 repository ownership, constraints, cascades, and live schema", as
     });
     assert.equal(ambiguousDiscovery.reused, false);
     assert.equal(ambiguousDiscovery.ambiguous, true, "multiple exact title/year/author candidates must not be merged");
-    await collectionsRepo.addResourceToCollection(collectionA.id, resource.id);
     const savedA = await resourcesRepo.saveResource({ resourceId: resource.id });
+    await collectionsRepo.addResourceToCollection(collectionA.id, resource.id);
+    assert.equal((await resourcesRepo.saveResource({ resourceId: resource.id })).id, savedA.id, "saving twice keeps one personal row");
+    const tagForA = await collectionsRepo.createTag({ name: "Private phase 05 tag" });
+    await collectionsRepo.attachTag(savedA.id, tagForA.id);
+    await resourcesRepo.updateSavedResource(savedA.id, { notes: "Private phase 05 note", readingStatus: "reading" });
+    assert.equal((await collectionsRepo.addResourceToCollection(collectionA.id, resource.id)).resourceId, resource.id, "membership add is idempotent");
+    assert.equal((await collectionsRepo.createCollection({ name: "synthetic a COLLECTION" })).id, collectionA.id, "collection uniqueness ignores case per user");
     await studiesRepo.saveStudyAnalysis(studyA.id, { summary: "Synthetic analysis", analysisVersion: 1 });
     await studiesRepo.replaceStudySections(studyA.id, [{ label: "Synthetic section", startPage: 1, endPage: 2, normalizedTextReference: "synthetic" }]);
     await studiesRepo.addStudyRelatedSource(studyA.id, { resourceId: resource.id, relevanceReason: "Synthetic test", relevanceScore: 0.5, selectedForRrl: true });
@@ -138,6 +144,8 @@ test("Phase 03 repository ownership, constraints, cascades, and live schema", as
     assert.equal((await collectionsRepo.listCollections()).some((item) => item.id === collectionA.id), false);
     assert.equal((await collectionsRepo.listCollections()).some((item) => item.id === collectionB.id), true);
     assert.equal((await resourcesRepo.listSavedResources()).some((item) => item.saved.id === savedA.id), false);
+    assert.equal((await collectionsRepo.listTags()).some((item) => item.id === tagForA.id), false);
+    assert.equal((await collectionsRepo.listLibraryLinks()).tagLinks.some((item) => item.tagId === tagForA.id), false);
     assert.equal((await resourcesRepo.listSavedResources()).some((item) => item.saved.id === savedB.id), true);
     assert.equal((await studiesRepo.listStudies()).some((item) => item.id === studyA.id), false);
     assert.equal((await studiesRepo.listStudies()).some((item) => item.id === studyB.id), true);
@@ -149,6 +157,10 @@ test("Phase 03 repository ownership, constraints, cascades, and live schema", as
     await assert.rejects(collectionsRepo.removeResourceFromCollection(collectionA.id, resource.id), /NEXT_NOT_FOUND/);
     await assert.rejects(collectionsRepo.deleteCollection(collectionA.id), /NEXT_NOT_FOUND/);
     await assert.rejects(resourcesRepo.updateSavedResource(savedA.id, { notes: "B attempted mutation" }), /NEXT_NOT_FOUND/);
+    await assert.rejects(resourcesRepo.updateSavedResource(savedA.id, { readingStatus: "read" }), /NEXT_NOT_FOUND/);
+    await assert.rejects(collectionsRepo.attachTag(savedA.id, tagForA.id), /NEXT_NOT_FOUND/);
+    await assert.rejects(collectionsRepo.removeTag(savedA.id, tagForA.id), /NEXT_NOT_FOUND/);
+    assert.equal(await collectionsRepo.deleteTag(tagForA.id), false);
     await assert.rejects(resourcesRepo.removeSavedResource(savedA.id), /NEXT_NOT_FOUND/);
 
     // Study and nested analysis/sections/related-source operations resolve the parent owner.
@@ -176,6 +188,8 @@ test("Phase 03 repository ownership, constraints, cascades, and live schema", as
 
     setTestIdentity(userA);
     assert.equal((await collectionsRepo.getCollection(collectionA.id)).items.length, 1);
+    assert.equal((await resourcesRepo.listSavedResources()).find((item) => item.saved.id === savedA.id).saved.notes, "Private phase 05 note");
+    assert.equal((await resourcesRepo.listSavedResources()).find((item) => item.saved.id === savedA.id).saved.readingStatus, "reading");
     assert.equal((await studiesRepo.getStudyAnalysis(studyA.id)).length, 1);
     assert.equal((await studiesRepo.listStudyRelatedSources(studyA.id)).length, 1);
     assert.equal((await rrlRepo.getRrlDraft(draftA.id)).draft.content, "Synthetic draft [synthetic-key].");
@@ -185,6 +199,10 @@ test("Phase 03 repository ownership, constraints, cascades, and live schema", as
     await expectConstraint(() => client`insert into public.hccite_user_profile (clerk_user_id) values (${userA})`);
     await expectConstraint(() => client`insert into public.hccite_saved_resource (user_id, resource_id) values (${profileA}, ${resource.id})`);
     await expectConstraint(() => client`insert into public.hccite_collection_resource (collection_id, resource_id) values (${collectionA.id}, ${resource.id})`);
+    await expectConstraint(() => client`insert into public.hccite_collection (user_id, name) values (${profileA}, 'SYNTHETIC A COLLECTION')`);
+    await assert.rejects(resourcesRepo.updateSavedResource(savedA.id, { readingStatus: "invalid" }));
+    await assert.rejects(resourcesRepo.removeSavedResource("not-a-uuid"));
+    await assert.rejects(collectionsRepo.addResourceToCollection("not-a-uuid", resource.id));
     const tagA = (await client`insert into public.hccite_tag (user_id, name) values (${profileA}, 'Synthetic Unique Tag') returning id`)[0].id;
     await expectConstraint(() => client`insert into public.hccite_tag (user_id, name) values (${profileA}, 'synthetic unique tag')`);
     await client`insert into public.hccite_tag (user_id, name) values (${profileC}, 'Synthetic Unique Tag')`;
@@ -203,8 +221,13 @@ test("Phase 03 repository ownership, constraints, cascades, and live schema", as
     await expectConstraint(() => client`insert into public.hccite_resource (type, title, source, source_identifier) values ('article', 'Synthetic provider ID duplicate', 'manual', ${fixtureToken + "-provider-unique"})`);
     await expectConstraint(() => client`insert into public.hccite_resource (type, title, source, doi, source_identifier) values ('article', 'Synthetic duplicate DOI normalized', 'manual', 'doi:10.5555/hccite-phase03.synthetic', ${fixtureToken + "-duplicate-doi-2"})`);
 
-    // Parent deletion cascades through user-owned rows and nested data without deleting shared Resource metadata.
+    await resourcesRepo.removeSavedResource(savedA.id);
+    assert.equal((await collectionsRepo.getCollection(collectionA.id)).items.length, 0);
+    assert.equal((await client`select id from public.hccite_resource where id = ${resource.id}`).length, 1);
     setTestIdentity(userB);
+    assert.equal((await resourcesRepo.listSavedResources()).some((row) => row.saved.id === savedB.id), true, "unsaving A preserves B's saved copy");
+
+    // Parent deletion cascades through user-owned rows and nested data without deleting shared Resource metadata.
     await studiesRepo.saveStudyAnalysis(studyB.id, { summary: "Synthetic cascade analysis" });
     await studiesRepo.replaceStudySections(studyB.id, [{ label: "Synthetic cascade section", startPage: 1, endPage: 1 }]);
     await studiesRepo.addStudyRelatedSource(studyB.id, { resourceId: resource.id, selectedForRrl: true });

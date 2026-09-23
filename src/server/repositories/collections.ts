@@ -15,8 +15,11 @@ const tagInputSchema = z.object({ name: z.string().trim().min(1).max(80) });
 export async function createCollection(input: unknown) {
   const data = collectionInputSchema.parse(input);
   const profile = await getCurrentUserProfile();
-  const [row] = await getDb().insert(collections).values({ ...data, userId: profile.id }).returning();
-  return row;
+  const db = getDb();
+  const [row] = await db.insert(collections).values({ ...data, userId: profile.id }).onConflictDoNothing().returning();
+  if (row) return row;
+  const [existing] = await db.select().from(collections).where(and(eq(collections.userId, profile.id), sql`lower(${collections.name}) = lower(${data.name})`)).limit(1);
+  return existing ?? null;
 }
 
 export async function listCollections() {
@@ -52,6 +55,8 @@ export async function addResourceToCollection(collectionId: string, resourceId: 
   requireOwnedRecord(owned && { ...owned, userId: profile.id }, profile.id);
   const [resource] = await db.select({ id: resources.id }).from(resources).where(eq(resources.id, resourceKey)).limit(1);
   if (!resource) return null;
+  const [saved] = await db.select({ id: savedResources.id }).from(savedResources).where(and(eq(savedResources.userId, profile.id), eq(savedResources.resourceId, resourceKey))).limit(1);
+  if (!saved) return null;
   const [membership] = await db.insert(collectionResources).values({ collectionId: collectionKey, resourceId: resourceKey }).onConflictDoNothing().returning();
   if (membership) return membership;
   const [existing] = await db.select().from(collectionResources).where(and(eq(collectionResources.collectionId, collectionKey), eq(collectionResources.resourceId, resourceKey))).limit(1);
@@ -103,4 +108,23 @@ export async function removeTag(savedResourceId: string, tagId: string) {
 export async function listTags() {
   const profile = await getCurrentUserProfile();
   return getDb().select().from(tags).where(eq(tags.userId, profile.id)).orderBy(tags.name);
+}
+
+export async function deleteTag(tagId: string) {
+  const id = idSchema.parse(tagId), profile = await getCurrentUserProfile();
+  const [deleted] = await getDb().delete(tags).where(and(eq(tags.id, id), eq(tags.userId, profile.id))).returning({ id: tags.id });
+  return !!deleted;
+}
+
+export async function listLibraryLinks() {
+  const profile = await getCurrentUserProfile(), db = getDb();
+  const [tagLinks, collectionLinks] = await Promise.all([
+    db.select({ savedResourceId: resourceTags.savedResourceId, tagId: resourceTags.tagId }).from(resourceTags)
+      .innerJoin(savedResources, eq(savedResources.id, resourceTags.savedResourceId))
+      .where(eq(savedResources.userId, profile.id)),
+    db.select({ resourceId: collectionResources.resourceId, collectionId: collectionResources.collectionId }).from(collectionResources)
+      .innerJoin(collections, eq(collections.id, collectionResources.collectionId))
+      .where(eq(collections.userId, profile.id)),
+  ]);
+  return { tagLinks, collectionLinks };
 }

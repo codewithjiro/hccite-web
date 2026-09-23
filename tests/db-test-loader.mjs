@@ -14,8 +14,7 @@ function loadLocalEnv() {
       if (match) {
         let value = match[1].trim();
         if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
-        process.env.DATABASE_URL = value;
-        return;
+        if (value) { process.env.DATABASE_URL = value; return; }
       }
     }
   }

@@ -84,7 +84,7 @@ export const collections = createTable("collection", {
   name: varchar("name", { length: 160 }).notNull(),
   description: text("description"),
   ...timestamps(),
-}, (table) => [index("hccite_collection_owner_name_idx").on(table.userId, table.name)]);
+}, (table) => [uniqueIndex("hccite_collection_owner_name_uq").on(table.userId, sql`lower(${table.name})`)]);
 
 export const collectionResources = createTable("collection_resource", {
   collectionId: uuid("collection_id").notNull().references(() => collections.id, { onDelete: "cascade" }),

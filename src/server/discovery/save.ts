@@ -32,5 +32,14 @@ export async function saveDiscoveredResource(locator: DiscoverySaveLocator, depe
   }
   const result = await dependencies.upsert(resource);
   const saved = await dependencies.save({ resourceId: result.resource.id });
-  return { resource: result.resource, saved: !!saved, reused: result.reused, ambiguous: result.ambiguous };
+  return { resource: result.resource, saved: !!saved, savedResourceId: saved?.id ?? null, reused: result.reused, ambiguous: result.ambiguous };
+}
+
+export async function resolveDiscoveredResource(locator: DiscoverySaveLocator) {
+  const valid = discoverySaveLocatorSchema.parse(locator);
+  const resource = valid.provider === "openalex" ? await getOpenAlexWorkById(valid.providerIdentifier)
+    : valid.provider === "crossref" ? (await lookupCrossrefDoi(valid.providerIdentifier)).resource
+      : await getGoogleBookById(valid.providerIdentifier);
+  if (resource.source !== valid.provider || resource.sourceIdentifier !== valid.providerIdentifier) throw new Error("Provider identity mismatch.");
+  return resource;
 }

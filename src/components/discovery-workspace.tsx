@@ -4,6 +4,8 @@ import { useState } from "react";
 import Image from "next/image";
 import { AlertCircle, ArrowUpRight, BookOpen, LoaderCircle, Search, Save } from "lucide-react";
 import type { NormalizedResource } from "~/server/discovery/normalization";
+import { findSavedId } from "~/lib/saved-indicator";
+import { CitationPanel } from "~/components/citation-panel";
 
 type DiscoveryKind = "articles" | "books" | "doi";
 type ProviderError = { provider: string | null; code: string; message: string; retryable: boolean };
@@ -36,7 +38,12 @@ export function DiscoveryWorkspace({ kind }: { kind: DiscoveryKind }) {
   const [error, setError] = useState<ProviderError | null>(null);
   const [status, setStatus] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
+  const [library, setLibrary] = useState<{ saved: { saved: { id: string }; resource: { id: string; doi: string | null; isbn: string | null; source: string; sourceIdentifier: string | null; citationMetadata: Record<string, unknown> } }[]; collections: { id: string; name: string }[] } | null>(null);
   const config = titles[kind];
+
+  async function refreshLibrary() {
+    try { const response = await fetch("/api/library", { cache: "no-store" }); if (response.ok) setLibrary(await response.json()); } catch { /* Discovery remains usable if personal state is temporarily unavailable. */ }
+  }
 
   async function runSearch(nextPage = 1, nextStartIndex = 0, append = false) {
     const q = query.trim();
@@ -57,6 +64,7 @@ export function DiscoveryWorkspace({ kind }: { kind: DiscoveryKind }) {
       const response = await fetch(url, { headers: { Accept: "application/json" } });
       const payload = await response.json() as SearchResult & { error?: ProviderError };
       if (!response.ok) throw payload.error ?? { provider: config.provider, code: "unknown", message: `${config.provider} request failed.`, retryable: true };
+      void refreshLibrary();
       const found = payload.items ?? (payload.resource ? [payload.resource] : []);
       setResults((current) => append ? [...current, ...found] : found);
       setTotal(payload.total ?? found.length);
@@ -83,7 +91,33 @@ export function DiscoveryWorkspace({ kind }: { kind: DiscoveryKind }) {
       setStatus(payload.ambiguous
         ? "This was saved separately because similar records are ambiguous; no automatic merge was made."
         : payload.reused ? "The canonical Resource was reused and saved to your library." : "Resource saved to your library.");
+      await refreshLibrary();
     } catch (caught) { setStatus(caught instanceof Error ? caught.message : "Could not save this resource."); }
+  }
+
+  async function addToCollection(resource: NormalizedResource, collectionId: string) {
+    const providerIdentifier = resource.source === "crossref" ? resource.doi : resource.sourceIdentifier;
+    if (!providerIdentifier || resource.source === "manual") return;
+    setStatus("Adding source to collection…");
+    try {
+      const response = await fetch("/api/library", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "saveToCollection", collectionId, locator: { provider: resource.source, providerIdentifier } }) });
+      const body = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Could not add the source.");
+      setStatus("Source saved and added to your collection."); await refreshLibrary();
+    } catch (caught) { setStatus(caught instanceof Error ? caught.message : "Could not add the source."); }
+  }
+
+  async function unsave(savedResourceId: string) {
+    setStatus("Removing source…");
+    try {
+      const response = await fetch("/api/library", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "unsave", savedResourceId }) });
+      if (!response.ok) throw new Error();
+      setStatus("Source removed from your library."); await refreshLibrary();
+    } catch { setStatus("Could not remove the source. Retry shortly."); }
+  }
+
+  function savedIdFor(resource: NormalizedResource) {
+    return findSavedId(resource, library?.saved ?? []);
   }
 
   const next = () => kind === "books" ? runSearch(1, startIndex + 20, true) : runSearch(page + 1, 0, true);
@@ -128,14 +162,14 @@ export function DiscoveryWorkspace({ kind }: { kind: DiscoveryKind }) {
       {!loading && hasSearched && !error && results.length === 0 && <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center"><BookOpen className="mx-auto size-8 text-muted-foreground" /><h2 className="mt-3 font-semibold">No results yet</h2><p className="mt-1 text-sm text-muted-foreground">Try a broader query or check the spelling.</p></div>}
       {!!results.length && <div className="space-y-4">
         <div className="flex items-center justify-between gap-3"><h2 className="font-semibold">Results</h2><span className="text-sm text-muted-foreground">{total === null ? results.length : `${results.length} shown${total ? ` · ${total.toLocaleString()} reported` : ""}`}</span></div>
-        {results.map((resource, index) => <ResultCard key={`${resource.source}-${resource.sourceIdentifier}-${index}`} resource={resource} onSave={save} />)}
+        {results.map((resource, index) => <ResultCard key={`${resource.source}-${resource.sourceIdentifier}-${index}`} resource={resource} onSave={save} onUnsave={unsave} onAddCollection={addToCollection} savedId={savedIdFor(resource)} collections={library?.collections ?? []} />)}
         {hasMore && <div className="flex justify-center"><button type="button" disabled={loading} onClick={next} className="min-h-12 rounded-xl border border-border bg-card px-6 text-sm font-semibold hover:bg-muted disabled:opacity-60">{loading ? "Loading…" : "Load more"}</button></div>}
       </div>}
     </section>
   );
 }
 
-function ResultCard({ resource, onSave }: { resource: NormalizedResource; onSave: (resource: NormalizedResource) => void }) {
+function ResultCard({ resource, onSave, onUnsave, onAddCollection, savedId, collections }: { resource: NormalizedResource; onSave: (resource: NormalizedResource) => void; onUnsave: (id: string) => void; onAddCollection: (resource: NormalizedResource, id: string) => void; savedId?: string; collections: { id: string; name: string }[] }) {
   const openAccess = metadata(resource, "openAccess");
   const cover = metaValue(resource, "coverImageUrl");
   const coverImageUrl = typeof cover === "string" ? cover : null;
@@ -154,11 +188,13 @@ function ResultCard({ resource, onSave }: { resource: NormalizedResource; onSave
         {resource.isbn && <p className="mt-1 break-all text-sm"><span className="text-muted-foreground">ISBN: </span>{resource.isbn}</p>}
         {resource.abstract && <p className="mt-3 line-clamp-5 whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">{resource.abstract}</p>}
         <div className="mt-4 flex flex-wrap gap-2">
-          {canSave ? <button type="button" onClick={() => onSave(resource)} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-3.5 text-sm font-semibold text-primary-foreground hover:opacity-90"><Save aria-hidden="true" className="size-4" />Save to library</button> : <span className="text-xs text-muted-foreground">Provider record has no stable ID for saving.</span>}
+          {canSave ? savedId ? <button type="button" onClick={() => onUnsave(savedId)} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-primary px-3.5 text-sm font-semibold text-primary"><Save aria-hidden="true" className="size-4" />Saved · Unsave</button> : <button type="button" onClick={() => onSave(resource)} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-3.5 text-sm font-semibold text-primary-foreground hover:opacity-90"><Save aria-hidden="true" className="size-4" />Save to library</button> : <span className="text-xs text-muted-foreground">Provider record has no stable ID for saving.</span>}
+          {canSave && collections.length > 0 && <select aria-label={`Add ${resource.title} to collection`} defaultValue="" onChange={(e) => { if (e.target.value) onAddCollection(resource, e.target.value); e.target.value = ""; }} className="min-h-10 max-w-full rounded-xl border border-border bg-background px-3 text-sm"><option value="">Add to collection…</option>{collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.name}</option>)}</select>}
           {doiUrl && <a href={doiUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-border px-3.5 text-sm font-semibold hover:bg-muted">DOI <ArrowUpRight aria-hidden="true" className="size-4" /></a>}
           {sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-border px-3.5 text-sm font-semibold hover:bg-muted">Source record <ArrowUpRight aria-hidden="true" className="size-4" /></a>}
           {typeof metaValue(resource, "previewUrl") === "string" && <a href={String(metaValue(resource, "previewUrl"))} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-border px-3.5 text-sm font-semibold hover:bg-muted">Preview <ArrowUpRight aria-hidden="true" className="size-4" /></a>}
         </div>
+        {canSave && <CitationPanel locator={{ provider: resource.source as "openalex" | "crossref" | "google_books", providerIdentifier: (resource.source === "crossref" ? resource.doi : resource.sourceIdentifier)! }} />}
       </div>
     </div>
     <footer className="border-t border-border px-5 py-3 text-xs text-muted-foreground sm:px-6">Provider ID: <span className="break-all">{resource.sourceIdentifier}</span>{resource.retrievedAt && <> · Retrieved {new Date(resource.retrievedAt).toLocaleString()}</>}</footer>
