@@ -1,7 +1,7 @@
-import { ComingSoon } from "~/components/coming-soon";
+import { DiscoveryWorkspace } from "~/components/discovery-workspace";
 import { requireUserId } from "~/server/auth";
 
 export default async function Page() {
   await requireUserId();
-  return <ComingSoon path="/research-articles" />;
+  return <DiscoveryWorkspace kind="articles" />;
 }

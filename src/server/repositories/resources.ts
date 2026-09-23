@@ -1,14 +1,15 @@
 import "server-only";
 
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireOwnedRecord } from "~/server/auth";
 import { getDb } from "~/server/db";
 import { resources, savedResources } from "~/server/db/schema";
 import { getCurrentUserProfile } from "./profiles";
+import { conservativeTitleCandidates, isbn10FromIsbn13, isbn13FromIsbn10, mergeNormalizedResources, normalizeDoi, normalizeIsbn, normalizedResourceSchema, type NormalizedResource } from "~/server/discovery/normalization";
 
-const doiSchema = z.string().trim().min(1).max(512).transform((doi) => doi.replace(/^https?:\/\/(dx\.)?doi\.org\//i, "").replace(/^doi:\s*/i, "").toLowerCase());
-const isbnSchema = z.string().trim().min(1).max(20).transform((isbn) => isbn.replace(/[^0-9Xx]/g, "").toUpperCase()).refine((isbn) => isbn.length > 0, "ISBN must include a digit or X");
+const doiSchema = z.string().trim().min(1).max(512).transform(normalizeDoi).refine((doi) => doi !== null, "Enter a valid DOI.").transform((doi) => doi!);
+const isbnSchema = z.string().trim().min(1).max(32).transform(normalizeIsbn).refine((isbn) => isbn !== null, "Enter a valid ISBN-10 or ISBN-13.").transform((isbn) => isbn!);
 export const resourceInputSchema = z.object({
   type: z.enum(["article", "book", "other"]), title: z.string().trim().min(1).max(10000),
   authors: z.array(z.string().trim().min(1).max(500)).max(500).default([]),
@@ -28,6 +29,73 @@ export async function createResource(input: unknown) {
   const data = resourceInputSchema.parse(input);
   const [resource] = await getDb().insert(resources).values(data).returning();
   return resource;
+}
+
+function asNormalized(resource: typeof resources.$inferSelect): NormalizedResource {
+  return normalizedResourceSchema.parse({ ...resource, retrievedAt: resource.retrievedAt ?? resource.createdAt });
+}
+
+function identifiers(resource: NormalizedResource) {
+  const extras = resource.citationMetadata.isbnVariants;
+  const variants = Array.isArray(extras) ? extras.map((item) => item && typeof item === "object" && "isbn" in item ? normalizeIsbn(String(item.isbn ?? "")) : null).filter((v): v is string => !!v) : [];
+  const normalized = [resource.isbn, ...variants].map((value) => normalizeIsbn(value)).filter((value): value is string => !!value);
+  const isbn13 = normalized.find((value) => value.length === 13) ?? normalized.map(isbn13FromIsbn10).find((value) => !!value) ?? null;
+  const isbn10 = normalized.find((value) => value.length === 10) ?? normalized.map(isbn10FromIsbn13).find((value) => !!value) ?? null;
+  return { doi: normalizeDoi(resource.doi), isbn13, isbn10 };
+}
+
+/** Canonical public Resource resolver used by discovery saves. Matching is exact by DOI/ISBN/provider ID;
+ * title matching requires the exact normalized title, year and primary author. Ambiguous sets are never merged.
+ */
+export async function upsertDiscoveryResource(input: unknown) {
+  const incoming = normalizedResourceSchema.parse(input);
+  const db = getDb();
+  const keys = identifiers(incoming);
+  const conditions = [];
+  const providerId = incoming.sourceIdentifier ? and(eq(resources.source, incoming.source), eq(resources.sourceIdentifier, incoming.sourceIdentifier)) : null;
+  const addDoi = () => { if (keys.doi) conditions.push(sql`lower(regexp_replace(regexp_replace(${resources.doi}, '^doi:\\s*', '', 'i'), '^https?://(dx\\.)?doi\\.org/', '', 'i')) = ${keys.doi}`); };
+  const addIsbn = () => {
+    if (keys.isbn13) conditions.push(sql`upper(regexp_replace(${resources.isbn}, '[^0-9Xx]', '', 'g')) = ${keys.isbn13}`);
+    if (keys.isbn10) conditions.push(sql`upper(regexp_replace(${resources.isbn}, '[^0-9Xx]', '', 'g')) = ${keys.isbn10}`);
+  };
+  if (incoming.type === "book") {
+    addIsbn(); if (providerId) conditions.push(providerId);
+  } else {
+    addDoi(); if (!keys.doi && providerId) conditions.push(providerId);
+    if (incoming.type === "other") addIsbn();
+  }
+  let existing: typeof resources.$inferSelect | undefined;
+  for (const condition of conditions) {
+    const [found] = await db.select().from(resources).where(condition).limit(1);
+    if (found) { existing = found; break; }
+  }
+
+  let ambiguous: Array<typeof resources.$inferSelect> = [];
+  if (!existing && incoming.year && incoming.authors[0]) {
+    const candidates = await db.select().from(resources).where(and(eq(resources.type, incoming.type), eq(resources.year, incoming.year))).limit(5000);
+    const matched = conservativeTitleCandidates(incoming, candidates);
+    existing = matched.match ?? undefined;
+    ambiguous = matched.ambiguous;
+  }
+
+  if (existing) {
+    const merged = mergeNormalizedResources(asNormalized(existing), incoming);
+    const [updated] = await db.update(resources).set({ ...merged, updatedAt: new Date() }).where(eq(resources.id, existing.id)).returning();
+    return { resource: updated ?? existing, reused: true, ambiguous: false };
+  }
+
+  try {
+    const [created] = await db.insert(resources).values(incoming).returning();
+    return { resource: created!, reused: false, ambiguous: ambiguous.length > 0 };
+  } catch (error) {
+    // A simultaneous request can win a unique DOI/ISBN/provider-ID index after the lookup.
+    if (!error || typeof error !== "object" || !("code" in error) || error.code !== "23505") throw error;
+    const [raced] = conditions.length ? await db.select().from(resources).where(or(...conditions)).limit(1) : [];
+    if (!raced) throw error;
+    const merged = mergeNormalizedResources(asNormalized(raced), incoming);
+    const [updated] = await db.update(resources).set({ ...merged, updatedAt: new Date() }).where(eq(resources.id, raced.id)).returning();
+    return { resource: updated ?? raced, reused: true, ambiguous: false };
+  }
 }
 
 export async function getResource(resourceId: string) {

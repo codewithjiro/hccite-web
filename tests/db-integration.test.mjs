@@ -24,7 +24,7 @@ test("Phase 03 repository ownership, constraints, cascades, and live schema", as
   try {
     // Always start from a clean, clearly synthetic namespace in case a previous run was interrupted.
     await client`delete from public.hccite_user_profile where clerk_user_id in (${userA}, ${userB}, ${userC})`;
-    await client`delete from public.hccite_resource where source_identifier like ${fixtureToken + "%"}`;
+    await client`delete from public.hccite_resource where source_identifier like ${fixtureToken + "%"} or doi = '10.5555/hccite-phase04.shared' or source_identifier = 'W-hccite-phase04-ambiguous'`;
 
     setTestIdentity(userA);
     const collectionA = await collectionsRepo.createCollection({ name: "Synthetic A collection", description: "Phase 03 test fixture" });
@@ -37,6 +37,37 @@ test("Phase 03 repository ownership, constraints, cascades, and live schema", as
       doi: "10.5555/hccite-phase03.synthetic", source: "manual", sourceIdentifier: `${fixtureToken}-shared-resource`,
       url: "https://example.invalid/synthetic-resource", abstract: "Synthetic fixture only.",
     });
+    const discoveredOpenAlex = await resourcesRepo.upsertDiscoveryResource({
+      type: "article", title: "Synthetic provider conflict paper", authors: ["Synthetic Researcher"], year: 2022, publicationDate: "2022-04-01",
+      doi: "10.5555/hccite-phase04.shared", isbn: null, publisher: null, venue: "Synthetic Journal", source: "openalex",
+      sourceIdentifier: `${fixtureToken}-openalex-shared`, url: "https://openalex.org/W-hccite-phase04-shared", abstract: null,
+      retrievedAt: new Date("2026-09-23T00:00:00Z"), citationMetadata: { openAlexId: "W-hccite-phase04-shared" },
+    });
+    const discoveredCrossref = await resourcesRepo.upsertDiscoveryResource({
+      type: "article", title: "Synthetic provider conflict paper", authors: ["Synthetic Researcher", "Synthetic Coauthor"], year: 2022, publicationDate: "2022-04-01",
+      doi: "https://doi.org/10.5555/HCCITE-PHASE04.SHARED", isbn: null, publisher: "Synthetic Press", venue: "Synthetic Journal", source: "crossref",
+      sourceIdentifier: "10.5555/hccite-phase04.shared", url: "https://doi.org/10.5555/hccite-phase04.shared", abstract: "Richer provider abstract.",
+      retrievedAt: new Date("2026-09-23T00:01:00Z"), citationMetadata: { crossrefType: "journal-article" },
+    });
+    assert.equal(discoveredCrossref.reused, true, "equivalent normalized DOI forms must reuse one canonical Resource");
+    assert.equal(discoveredCrossref.resource.id, discoveredOpenAlex.resource.id);
+    assert.deepEqual(discoveredCrossref.resource.authors, ["Synthetic Researcher", "Synthetic Coauthor"]);
+    assert.equal(discoveredCrossref.resource.publisher, "Synthetic Press");
+    assert.equal(discoveredCrossref.resource.abstract, "Richer provider abstract.");
+    assert.equal(discoveredCrossref.resource.source, "openalex", "the canonical record keeps its primary provenance");
+    assert.equal(discoveredCrossref.resource.citationMetadata.provenance.length, 2);
+
+    for (const suffix of ["one", "two"]) await resourcesRepo.createResource({
+      type: "article", title: "Synthetic ambiguous title fallback", authors: ["Synthetic Fallback Author"], year: 2020,
+      source: "manual", sourceIdentifier: `${fixtureToken}-ambiguous-${suffix}`,
+    });
+    const ambiguousDiscovery = await resourcesRepo.upsertDiscoveryResource({
+      type: "article", title: "Synthetic ambiguous title fallback", authors: ["Synthetic Fallback Author"], year: 2020,
+      publicationDate: null, doi: null, isbn: null, publisher: null, venue: null, source: "openalex", sourceIdentifier: `${fixtureToken}-openalex-ambiguous`,
+      url: "https://openalex.org/W-hccite-phase04-ambiguous", abstract: null, retrievedAt: new Date(), citationMetadata: {},
+    });
+    assert.equal(ambiguousDiscovery.reused, false);
+    assert.equal(ambiguousDiscovery.ambiguous, true, "multiple exact title/year/author candidates must not be merged");
     await collectionsRepo.addResourceToCollection(collectionA.id, resource.id);
     const savedA = await resourcesRepo.saveResource({ resourceId: resource.id });
     await studiesRepo.saveStudyAnalysis(studyA.id, { summary: "Synthetic analysis", analysisVersion: 1 });
@@ -166,7 +197,7 @@ test("Phase 03 repository ownership, constraints, cascades, and live schema", as
     assert.deepEqual(liveTables.map((row) => row.table_name), expectedTables);
   } finally {
     await client`delete from public.hccite_user_profile where clerk_user_id in (${userA}, ${userB}, ${userC})`;
-    await client`delete from public.hccite_resource where source_identifier like ${fixtureToken + "%"} or doi = '10.5555/hccite-phase03.synthetic'`;
+    await client`delete from public.hccite_resource where source_identifier like ${fixtureToken + "%"} or doi in ('10.5555/hccite-phase03.synthetic', '10.5555/hccite-phase04.shared') or source_identifier = 'W-hccite-phase04-ambiguous'`;
     await client.end();
     await closeDb();
   }
