@@ -1,23 +1,27 @@
-# HCCite local setup — Phase 01
+# HCCite local setup — Phase 02
 
-The repository's authoritative product `README.md` was not present in the supplied workspace. This file documents only the implemented foundation. The implementation brief is `agents/PHASE_01_FOUNDATION.md`.
+The product specification is `README.md`. The current implementation includes the Phase 01 interface and Phase 02 Clerk authentication. Research and database features are later phases.
 
-## Run the app
+## Run
 
-1. Install Node.js 20 or newer and pnpm. This workspace was built with Node 24 and pnpm 11.
-2. Run `pnpm install`.
-3. Run `pnpm dev`, then open `http://localhost:3000`.
+1. Install Node.js 20 or newer and pnpm, then run `pnpm install`.
+2. Create a free Clerk application in the [Clerk Dashboard](https://dashboard.clerk.com/). Enable email sign-up and sign-in in its settings. Copy `.env.example` to `.env.local` and set `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` from the same Clerk instance. Leave the Clerk route and fallback URL values as shown. Set these before starting development or building for production.
+3. Run `pnpm dev` and open `http://localhost:3000`.
 
-No account, database, or API key is required for Phase 01. The sign-in pages and workspace routes are clearly marked previews. Use `pnpm lint`, `pnpm typecheck`, and `pnpm build` for checks.
+Keep `.env.local` and all secrets untracked. If either Clerk key is missing, the public landing and auth setup message remain accessible; every workspace and account route stays closed.
 
-## Later configuration
+## Authentication routes
 
-Copy `.env.example` to an ignored `.env` file when you begin connecting services. Add real secrets locally; do not commit them. The example lists Clerk, PostgreSQL, OpenAlex, Crossref, Google Books, UploadThing, and Gemini settings. The only browser-exposed value is Clerk's publishable key. Server credentials are validated when their feature is used, so leaving them unset does not prevent Phase 01 from starting.
+`/` is public. `/sign-in` and `/sign-up` are public Clerk-hosting routes with optional catch-all segments for multi-step flows. `/profile` and all workspace pages are private. A signed-out request to a private page redirects to `/sign-in`, with its destination preserved for return after sign-in. Private `/api` paths deny unauthenticated requests with `401` when Clerk is configured, or `503` when its keys are absent.
 
-PostgreSQL/Drizzle domain tables and migrations arrive in Phase 03. `start-database.sh` is the optional Create T3 App helper for a local PostgreSQL container under Bash/WSL, Docker, or Podman. Database commands require `DATABASE_URL` and are not part of the Phase 01 check.
+The workspace includes `/dashboard`, `/research-articles`, `/doi-lookup`, `/books`, `/ai-analyzer`, `/studies`, `/collections`, and study-specific `/studies/[studyId]/analysis`, `/literature`, and `/rrl`. Those research pages still explain their later-phase status. The account button opens Clerk profile and sign-out actions; `/profile` provides the full profile screen.
 
-Before any Phase 06 study upload, the app must warn that this build is for non-confidential/demo files only. UploadThing free-plan URLs can be accessed by anyone with the URL. Do not put private research files in the preview.
+## Server authorization handoff
 
-## Routes
+In every private Server Component, Server Action, or route handler, call `await requireUserId()` from `src/server/auth.ts` immediately before reading or changing user data. Never take an owner ID from browser input. For a user-owned row, load it and call `requireOwnedRecord(row, ownerId)` before returning or mutating it. The helper returns the row to its owner and returns a 404 for absent or foreign rows. Phase 03's `UserProfile` will have an internal ID: resolve it from the authenticated Clerk ID (`clerkUserId`) first and use that internal ID as `ownerId` when checking records whose `userId` references `UserProfile.id`. Scope list queries by that same internal ID at the database query level.
 
-`/` is the landing page. `/sign-in` and `/sign-up` explain that Clerk arrives in Phase 02. The route shell includes `/dashboard`, `/research-articles`, `/doi-lookup`, `/books`, `/ai-analyzer`, `/studies`, `/collections`, and `/studies/[studyId]/analysis`, `/studies/[studyId]/literature`, `/studies/[studyId]/rrl`.
+`src/middleware.ts` provides a request boundary for all current workspace paths and `/api`; the workspace server layout repeats the session check. New data access must use the server helpers near the query or mutation because a layout alone does not authorize a record or rerun on every client navigation.
+
+## Checks
+
+Run `pnpm test:auth`, `pnpm lint`, `pnpm typecheck`, and `pnpm build`. No database is needed for Phase 02. Phase 03 adds PostgreSQL schema and repositories. Other credentials listed in `.env.example` are for later phases.

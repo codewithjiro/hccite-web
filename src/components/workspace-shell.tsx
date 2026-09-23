@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { UserButton } from "@clerk/nextjs";
 import { usePathname } from "next/navigation";
-import { BookOpen, ChartNoAxesCombined, FileSearch, Files, LibraryBig, Menu, SearchCheck, Sparkles, X } from "lucide-react";
+import { BookOpen, ChartNoAxesCombined, FileSearch, Files, LibraryBig, Menu, SearchCheck, Sparkles, UserRound, X } from "lucide-react";
 import { useState } from "react";
 import { Brand } from "~/components/brand";
 import { ThemeControl } from "~/components/theme-control";
@@ -47,11 +48,12 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
               {menuOpen ? <X aria-hidden="true" className="size-5" /> : <Menu aria-hidden="true" className="size-5" />}
             </button>
             <Brand compact />
-            <span className="hidden rounded-full border border-border bg-muted px-3 py-1 text-xs font-semibold text-muted-foreground sm:inline-flex">Phase 1 preview</span>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <ThemeControl />
             <Link href="/" className="hidden min-h-11 items-center rounded-xl px-3 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring sm:inline-flex">Home</Link>
+            <Link href="/profile" aria-label="My account" className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring sm:px-3"><UserRound aria-hidden="true" className="size-4" /><span className="hidden lg:inline">My account</span></Link>
+            <UserButton userProfileMode="navigation" userProfileUrl="/profile" fallback={<span role="status" className="text-xs text-muted-foreground">Loading…</span>} />
           </div>
         </div>
         {menuOpen && <div id="mobile-workspace-nav" className="max-h-[calc(100vh-4.25rem)] overflow-y-auto border-t border-border bg-card p-4 md:hidden">{navigation}</div>}

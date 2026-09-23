@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowRight, BookOpen, FileSearch, LibraryBig, ShieldCheck } from "lucide-react";
 import { Brand } from "~/components/brand";
 import { ThemeControl } from "~/components/theme-control";
+import { LandingAuthLinks } from "~/components/landing-auth-links";
 
 const plannedFeatures = [
   { title: "Discover sources", description: "Find scholarly articles and books, then inspect their bibliographic details.", icon: FileSearch },
@@ -20,8 +21,7 @@ export default function HomePage() {
           <Brand />
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <ThemeControl />
-            <Link href="/sign-in" className="inline-flex min-h-11 items-center rounded-xl px-3 text-sm font-semibold text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">Sign in</Link>
-            <Link href="/sign-up" className="inline-flex min-h-11 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Create account</Link>
+            <LandingAuthLinks />
           </div>
         </div>
       </header>
@@ -34,10 +34,10 @@ export default function HomePage() {
               <h1 className="text-4xl font-bold leading-[1.12] tracking-tight text-foreground sm:text-5xl lg:text-6xl">Make every source <span className="text-primary">count.</span></h1>
               <p className="mt-6 max-w-xl text-lg leading-8 text-muted-foreground">HCCite is being built to help researchers discover literature, manage references, analyze studies, and write with a clear trail back to real sources.</p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link href="/dashboard" className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Explore workspace preview <ArrowRight aria-hidden="true" className="size-4" /></Link>
+                <Link href="/dashboard" prefetch={false} className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Open workspace <ArrowRight aria-hidden="true" className="size-4" /></Link>
                 <Link href="/sign-up" className="inline-flex min-h-12 items-center rounded-xl border border-border bg-card px-5 text-sm font-semibold text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Create an account</Link>
               </div>
-              <p className="mt-5 text-sm text-muted-foreground">Phase 1 preview: sign in and research tools will be added in later phases.</p>
+              <p className="mt-5 text-sm text-muted-foreground">Sign in to access your workspace. Research tools are being added in later phases.</p>
             </div>
             <div className="rounded-[2rem] border border-border bg-card p-2 shadow-xl shadow-blue-950/10 dark:shadow-black/20 sm:p-3">
               <Image src="/assets/hero.png" alt="Holy Cross College campus building in Sta. Ana, Pampanga" width={3800} height={2534} priority sizes="(max-width: 1024px) 100vw, 50vw" className="h-auto w-full rounded-[1.4rem]" />
@@ -65,7 +65,7 @@ export default function HomePage() {
         </section>
       </main>
 
-      <footer className="border-t border-border px-4 py-7 text-center text-sm text-muted-foreground sm:px-6">HCCite · Holy Cross College research workspace · Foundation preview</footer>
+      <footer className="border-t border-border px-4 py-7 text-center text-sm text-muted-foreground sm:px-6">HCCite · Holy Cross College research workspace</footer>
     </div>
   );
 }
