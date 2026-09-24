@@ -5,9 +5,12 @@ import { z } from "zod";
 import { requireOwnedRecord } from "~/server/auth";
 import { getDb } from "~/server/db";
 import { resources, studies, studyAnalyses, studyRelatedSources, studySections } from "~/server/db/schema";
+import { StudyDeletionPartialFailure } from "~/server/studies/deletion-result";
 import { getCurrentUserProfile, getProfileForClerkUserId } from "./profiles";
 
 const idSchema = z.string().uuid();
+export { StudyDeletionPartialFailure } from "~/server/studies/deletion-result";
+
 export const createStudySchema = z.object({
   title: z.string().trim().min(1).max(500), originalFileName: z.string().trim().min(1).max(512),
   fileType: z.enum(["pdf", "docx"]), fileUrl: z.string().url().max(10000), fileStorageKey: z.string().trim().min(1).max(512),
@@ -65,12 +68,21 @@ export async function updateStudyStatus(studyId: string, status: "uploaded" | "p
 }
 
 /** External file deletion is explicit because PostgreSQL cascades cannot remove stored objects. */
-export async function deleteStudy(studyId: string, deleteStoredFile: (storageKey: string) => Promise<void>) {
+export async function deleteStudy(
+  studyId: string,
+  deleteStoredFile: (storageKey: string) => Promise<void>,
+  removeStudyRow?: (study: typeof studies.$inferSelect) => Promise<void>,
+) {
   const id = idSchema.parse(studyId), profile = await getCurrentUserProfile(), db = getDb();
   const [row] = await db.select().from(studies).where(and(eq(studies.id, id), eq(studies.userId, profile.id))).limit(1);
   const owned = requireOwnedRecord(row, profile.id);
   await deleteStoredFile(owned.fileStorageKey);
-  await db.delete(studies).where(and(eq(studies.id, owned.id), eq(studies.userId, profile.id)));
+  try {
+    if (removeStudyRow) await removeStudyRow(owned);
+    else await db.delete(studies).where(and(eq(studies.id, owned.id), eq(studies.userId, profile.id)));
+  } catch (error) {
+    throw new StudyDeletionPartialFailure({ cause: error });
+  }
   return owned;
 }
 

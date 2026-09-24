@@ -6,6 +6,7 @@ import { UTApi, UploadThingError } from "uploadthing/server";
 import { env, requireServerEnv } from "~/env";
 import { createStudyForClerkUser } from "~/server/repositories/studies";
 import { STUDY_DOCX_MIME, validateStudyFile } from "./file-validation";
+import { deleteStorageObject } from "./storage-deletion";
 
 const f = createUploadthing();
 const maxBytes = Math.floor(env.MAX_STUDY_FILE_MB * 1024 * 1024);
@@ -20,8 +21,7 @@ export function getUploadThingApi() {
 }
 
 export async function deleteStoredStudyFile(storageKey: string) {
-  const result = await getUploadThingApi().deleteFiles(storageKey);
-  if (!result.success) throw new Error("UploadThing did not confirm deletion of the study file.");
+  await deleteStorageObject(storageKey, (key) => getUploadThingApi().deleteFiles(key));
 }
 
 export const uploadRouter = {

@@ -7,6 +7,7 @@ import { sql } from "drizzle-orm";
 import * as collectionsRepo from "../src/server/repositories/collections.ts";
 import * as resourcesRepo from "../src/server/repositories/resources.ts";
 import * as studiesRepo from "../src/server/repositories/studies.ts";
+import { deleteStorageObject } from "../src/server/studies/storage-deletion.ts";
 import * as rrlRepo from "../src/server/repositories/rrl.ts";
 import { saveDiscoveredResource } from "../src/server/discovery/save.ts";
 
@@ -56,9 +57,19 @@ test("Phase 03 repository ownership, constraints, cascades, and live schema", as
     await studiesRepo.saveStudyAnalysis(deleteRetryStudy.id, { summary: "Synthetic deletion child" });
     await assert.rejects(studiesRepo.deleteStudy(deleteRetryStudy.id, async () => { throw new Error("storage unavailable"); }));
     assert.equal((await studiesRepo.getStudy(deleteRetryStudy.id)).id, deleteRetryStudy.id, "storage failure keeps metadata available for a safe retry");
-    let deletedKey = null;
-    await studiesRepo.deleteStudy(deleteRetryStudy.id, async (key) => { deletedKey = key; });
-    assert.equal(deletedKey, `${fixtureToken}-delete-retry`);
+    let storageObjectAbsent = false;
+    await assert.rejects(studiesRepo.deleteStudy(
+      deleteRetryStudy.id,
+      async (key) => { assert.equal(key, `${fixtureToken}-delete-retry`); storageObjectAbsent = true; },
+      async () => { throw new Error("controlled database cleanup failure"); },
+    ), (error) => error?.name === "StudyDeletionPartialFailure");
+    assert.equal(storageObjectAbsent, true, "storage deletion succeeded before the controlled DB cleanup failure");
+    assert.equal((await studiesRepo.getStudy(deleteRetryStudy.id)).fileStorageKey, `${fixtureToken}-delete-retry`, "partial failure keeps enough metadata for retry");
+    let missingObjectRetryCount = 0;
+    await studiesRepo.deleteStudy(deleteRetryStudy.id, async (key) => {
+      await deleteStorageObject(key, async () => { missingObjectRetryCount++; return { success: true, deletedCount: 0 }; });
+    });
+    assert.equal(missingObjectRetryCount, 1, "retry treats only the provider-confirmed already-absent response as complete");
     assert.equal((await client`select count(*)::int as count from public.hccite_study_analysis where study_id = ${deleteRetryStudy.id}`)[0].count, 0, "study deletion cascades dependent analysis rows");
     const discoveredOpenAlex = await resourcesRepo.upsertDiscoveryResource({
       type: "article", title: "Synthetic provider conflict paper", authors: ["Synthetic Researcher"], year: 2022, publicationDate: "2022-04-01",

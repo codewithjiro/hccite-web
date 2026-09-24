@@ -17,7 +17,7 @@
     "test:db": "node --experimental-strip-types --import ./tests/db-test-loader.mjs --test tests/db-integration.test.mjs",
     "test:discovery": "node --experimental-strip-types --import ./tests/discovery-test-loader.mjs --test tests/discovery.test.mjs",
     "test:citation": "node --experimental-strip-types --import ./tests/discovery-test-loader.mjs --test tests/citation.test.mjs tests/saved-indicator.test.mjs",
-    "test:studies": "node --experimental-strip-types --import ./tests/discovery-test-loader.mjs --test tests/study-upload.test.mjs",
+    "test:studies": "node --experimental-strip-types --import ./tests/discovery-test-loader.mjs --test tests/study-upload.test.mjs tests/study-deletion.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
