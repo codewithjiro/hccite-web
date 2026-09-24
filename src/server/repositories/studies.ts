@@ -57,7 +57,7 @@ export async function completeStudyProcessing(studyId: string, profileData: Stud
     if (owned.status !== "processing") throw new Error("Study is no longer processing.");
     const [existing] = await tx.select().from(studyAnalyses).where(and(eq(studyAnalyses.studyId, id), eq(studyAnalyses.analysisVersion, 1))).limit(1);
     if (!existing) {
-      const pages = owned.pageCount ? profile.importantPageRanges?.filter((r) => r.endPage <= owned.pageCount!) : [];
+      const pages = owned.pageCount ? profile.importantPageRanges?.filter((r) => r.endPage <= owned.pageCount!) : profile.importantPageRanges;
       await tx.insert(studyAnalyses).values({ ...profile, importantPageRanges: pages, studyId: id, analysisVersion: 1, model });
       await tx.delete(studySections).where(eq(studySections.studyId, id));
       if (validatedSections.length) await tx.insert(studySections).values(validatedSections.map((s, position) => ({ ...s, position, studyId: id })));

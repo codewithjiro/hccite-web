@@ -42,9 +42,11 @@ test("DOCX extraction preserves heading and paragraph order without page numbers
 
 test("Gemini validates output, retries 429 with Retry-After, and bounds failures", async () => {
   const waits = []; let calls = 0;
-  const fetcher = async () => ++calls === 1 ? new Response("", { status: 429, headers: { "Retry-After": "2" } }) : Response.json({ output_text: JSON.stringify(profile) });
+  const requestBodies = [];
+  const fetcher = async (_url, options) => { requestBodies.push(JSON.parse(options.body)); return ++calls === 1 ? new Response("", { status: 429, headers: { "Retry-After": "2" } }) : Response.json({ output_text: JSON.stringify(profile) }); };
   assert.deepEqual(await analyzeWithGemini({ fileType: "docx", text: "demo" }, { fetcher, delay: async (ms) => waits.push(ms) }), profile);
   assert.deepEqual(waits, [2000]);
+  assert.equal(requestBodies.every((body) => body.store === false), true);
   assert.equal(retryDelay(1), 2000);
   await assert.rejects(analyzeWithGemini({ fileType: "docx", text: "demo" }, { fetcher: async () => Response.json({ output_text: "not json" }) }), (e) => e instanceof GeminiFailure && e.kind === "invalid");
   let repeated = 0;
@@ -56,6 +58,17 @@ test("Gemini validates output, retries 429 with Retry-After, and bounds failures
   assert.equal(temporaryCalls, 2);
   await assert.rejects(analyzeWithGemini({ fileType: "docx", text: "demo" }, { fetcher: async () => { throw new Error("network"); } }), (e) => e.kind === "network");
   await assert.rejects(analyzeWithGemini({ fileType: "docx", text: "demo" }, { fetcher: async () => { throw new DOMException("timed out", "TimeoutError"); } }), (e) => e.kind === "timeout");
+});
+
+test("PDF targeted fallback prompt uses semantic sections rather than fixed page chunks", async () => {
+  let body;
+  await analyzeWithGemini({ fileType: "pdf", bytes: new TextEncoder().encode("%PDF-1.4 demo"), targetedSections: ["Abstract", "Methodology", "Conclusion"] }, {
+    fetcher: async (_url, options) => { body = JSON.parse(options.body); return Response.json({ output_text: JSON.stringify(profile) }); },
+  });
+  const prompt = body.input.find((part) => part.type === "text").text;
+  assert.match(prompt, /Abstract, Methodology, Conclusion/);
+  assert.match(prompt, /never arbitrary fixed-page chunks/);
+  assert.equal(body.store, false);
 });
 
 test("large PDF uses a temporary Gemini file and deletes it after validation", async () => {

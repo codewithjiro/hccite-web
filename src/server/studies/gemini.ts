@@ -21,7 +21,11 @@ function failure(response: Response): GeminiFailure {
   return new GeminiFailure("document");
 }
 
-export type GeminiInput = { fileType: "pdf"; bytes: Uint8Array } | { fileType: "docx"; text: string };
+export const TARGET_STUDY_SECTIONS = ["Abstract", "Introduction", "Research Problem", "Objectives", "Methodology", "Results", "Discussion", "Conclusion"] as const;
+
+export type GeminiInput =
+  | { fileType: "pdf"; bytes: Uint8Array; targetedSections?: readonly string[] }
+  | { fileType: "docx"; text: string };
 
 async function uploadTemporaryPdf(bytes: Uint8Array, key: string, fetcher: typeof fetch, delay: (ms: number) => Promise<void>) {
   const start = await fetcher("https://generativelanguage.googleapis.com/upload/v1beta/files", {
@@ -60,12 +64,15 @@ export async function analyzeWithGemini(input: GeminiInput, options: { fetcher?:
   const key = requireServerEnv("GEMINI_API_KEY");
   const fetcher = options.fetcher ?? fetch;
   const delay = options.delay ?? pause;
-  const prompt = "Analyze this non-confidential research study. Return only grounded fields. Use null or empty arrays for unsupported facts. Include title, concise summary, problem, objectives, keywords, methodology, concepts, optional population/findings/conclusion, and suggested literature search queries. For PDF page ranges, include only pages explicitly and reliably identified; otherwise return an empty array. Do not invent citations or page numbers.";
+  const sectionInstruction = input.fileType === "pdf" && input.targetedSections?.length
+    ? ` Whole-document analysis did not produce a usable profile. Re-analyze by locating only these semantic sections (never arbitrary fixed-page chunks): ${input.targetedSections.join(", ")}. Synthesize the profile from sections actually present and leave unsupported fields empty.`
+    : "";
+  const prompt = `Analyze this non-confidential research study. Return only grounded fields. Use null or empty arrays for unsupported facts. Include title, concise summary, problem, objectives, keywords, methodology, concepts, optional population/findings/conclusion, and suggested literature search queries. For PDF page ranges, include only pages explicitly and reliably identified; otherwise return an empty array. Do not invent citations or page numbers.${sectionInstruction}`;
   const temporary = input.fileType === "pdf" && input.bytes.length > 8_000_000 ? await uploadTemporaryPdf(input.bytes, key, fetcher, delay) : null;
   const inputParts = input.fileType === "pdf"
     ? [{ type: "document", ...(temporary ? { uri: temporary.uri } : { data: Buffer.from(input.bytes).toString("base64") }), mime_type: "application/pdf" }, { type: "text", text: prompt }]
     : [{ type: "text", text: `${prompt}\nDOCX has no reliable page numbers; importantPageRanges must be empty.\n\n${input.text}` }];
-  const body = JSON.stringify({ model: env.GEMINI_MODEL, input: inputParts, response_format: { type: "text", mime_type: "application/json", schema: geminiProfileJsonSchema } });
+  const body = JSON.stringify({ model: env.GEMINI_MODEL, input: inputParts, response_format: { type: "text", mime_type: "application/json", schema: geminiProfileJsonSchema }, store: false });
   let last: GeminiFailure = new GeminiFailure("temporary");
   try { for (let attempt = 0; attempt < (options.maxAttempts ?? 3); attempt++) {
     try {

@@ -3,7 +3,7 @@ import { env } from "~/env";
 import { claimStudyProcessing, completeStudyProcessing, failStudyProcessing } from "~/server/repositories/studies";
 import { extractDocx } from "./docx";
 import { validateStudyFile, STUDY_DOCX_MIME } from "./file-validation";
-import { analyzeWithGemini, GeminiFailure, safeGeminiError } from "./gemini";
+import { analyzeWithGemini, GeminiFailure, safeGeminiError, TARGET_STUDY_SECTIONS } from "./gemini";
 
 export async function processOwnedStudy(studyId: string, dependencies: { fetcher?: typeof fetch; analyze?: typeof analyzeWithGemini } = {}) {
   const result = await claimStudyProcessing(studyId);
@@ -26,13 +26,22 @@ export async function processOwnedStudy(studyId: string, dependencies: { fetcher
     let profile;
     try { profile = await analyze(docx ? { fileType: "docx", text: docx.text } : { fileType: "pdf", bytes }); }
     catch (error) {
-      if (!docx || !docx.sections.length || (error instanceof GeminiFailure && !["invalid", "document"].includes(error.kind))) throw error;
-      const preferred = docx.sections.filter((s) => /abstract|intro|problem|objectiv|method|result|discussion|conclusion/i.test(s.label));
-      if (!preferred.length) throw error;
-      const targeted = preferred.map((s) => `${s.label}\n${s.normalizedTextReference}`).join("\n\n").slice(0, 120_000);
-      profile = await analyze({ fileType: "docx", text: targeted });
+      if (error instanceof GeminiFailure && !["invalid", "document"].includes(error.kind)) throw error;
+      if (!docx) profile = await analyze({ fileType: "pdf", bytes, targetedSections: TARGET_STUDY_SECTIONS });
+      else {
+        if (!docx.sections.length) throw error;
+        const preferred = docx.sections.filter((s) => /abstract|intro|problem|objectiv|method|result|discussion|conclusion/i.test(s.label));
+        if (!preferred.length) throw error;
+        const targeted = preferred.map((s) => `${s.label}\n${s.normalizedTextReference}`).join("\n\n").slice(0, 120_000);
+        profile = await analyze({ fileType: "docx", text: targeted });
+      }
     }
-    await completeStudyProcessing(study.id, profile, env.GEMINI_MODEL, docx?.sections ?? []);
+    const pdfSections = study.fileType === "pdf" ? (profile.importantPageRanges ?? [])
+      .filter((range) => !study.pageCount || range.endPage <= study.pageCount)
+      .map((range) => ({
+      label: range.label, startPage: range.startPage, endPage: range.endPage, normalizedTextReference: null,
+    })) : [];
+    await completeStudyProcessing(study.id, profile, env.GEMINI_MODEL, docx?.sections ?? pdfSections);
     return { status: "ready" as const };
   } catch (error) {
     await failStudyProcessing(result.study.id, safeGeminiError(error));
