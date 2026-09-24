@@ -1,0 +1,9 @@
+# Phase 07 analysis handoff
+
+`processOwnedStudy(studyId)` operates only on a persisted, owned Study. Its repository claim is a conditional PostgreSQL update from `uploaded` or `failed` to `processing`; stale `processing` attempts can be reclaimed after 30 minutes. Success commits a single `StudyAnalysis` version 1 and ordered sections before setting `ready`. Failure retains the Study and UploadThing object and records a short safe error. A ready Study is returned without rerunning Gemini.
+
+`getOwnedStudyProfile(studyId)` is the owner-protected API for later phases. It returns the latest saved analysis as the `studyProfileSchema` shape, plus ordered `StudySection` rows. Future phases should read this profile without fetching the source file or sending it to Gemini again. Suggested queries are saved only; Phase 07 does not execute discovery.
+
+The Zod profile schema lives in `src/server/studies/profile.ts`. Optional unsupported fields may be absent. PDF page ranges are stored only when a known `Study.pageCount` bounds them; absent a reliable count, they are omitted. DOCX sections have null page columns and ordered heading/paragraph excerpts in `normalizedTextReference`, with `position` preserving order. DOCX fallback selects research sections after a malformed or unsupported whole-document response. A larger PDF uses a temporary Gemini Files API object, which is deleted on completion or left to its documented expiry if deletion fails; the canonical source remains UploadThing.
+
+PDF section extraction and a targeted PDF fallback are still pending. Registry download failures prevented adding the PDF text extraction dependency during this run. The browser receives safe processing status and errors. Gemini Free Tier and UploadThing public URL handling mean this build is for non-confidential/demo documents only. Live PDF and DOCX acceptance checks remain pending until a local `GEMINI_API_KEY` is supplied.

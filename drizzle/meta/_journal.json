@@ -29,6 +29,13 @@
       "when": 1790158444448,
       "tag": "0003_fresh_silver_fox",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790223414560,
+      "tag": "0004_mixed_barracuda",
+      "breakpoints": true
     }
   ]
 }

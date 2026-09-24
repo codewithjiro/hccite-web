@@ -18,6 +18,7 @@
     "test:discovery": "node --experimental-strip-types --import ./tests/discovery-test-loader.mjs --test tests/discovery.test.mjs",
     "test:citation": "node --experimental-strip-types --import ./tests/discovery-test-loader.mjs --test tests/citation.test.mjs tests/saved-indicator.test.mjs",
     "test:studies": "node --experimental-strip-types --import ./tests/discovery-test-loader.mjs --test tests/study-upload.test.mjs tests/study-deletion.test.mjs",
+    "test:analysis": "node --experimental-strip-types --import ./tests/discovery-test-loader.mjs --test tests/study-analysis.test.mjs && node --experimental-strip-types --import ./tests/db-test-loader.mjs --test tests/study-processing-db.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -30,7 +31,9 @@
     "class-variance-authority": "^0.7.1",
     "cn": "^0.3.2",
     "drizzle-orm": "^0.41.0",
+    "jszip": "^3.10.2",
     "lucide-react": "^1.47.0",
+    "mammoth": "^1.12.3",
     "next": "^15.2.3",
     "next-themes": "^0.4.6",
     "postgres": "^3.4.4",

@@ -1,11 +1,12 @@
 import "server-only";
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, or } from "drizzle-orm";
 import { z } from "zod";
 import { requireOwnedRecord } from "~/server/auth";
 import { getDb } from "~/server/db";
 import { resources, studies, studyAnalyses, studyRelatedSources, studySections } from "~/server/db/schema";
 import { StudyDeletionPartialFailure } from "~/server/studies/deletion-result";
+import { studyProfileSchema, type StudyProfile } from "~/server/studies/profile";
 import { getCurrentUserProfile, getProfileForClerkUserId } from "./profiles";
 
 const idSchema = z.string().uuid();
@@ -25,7 +26,55 @@ export const studyAnalysisSchema = z.object({
   importantPageRanges: z.array(z.object({ label: z.string().min(1).max(160), startPage: z.number().int().positive(), endPage: z.number().int().positive() }).refine((r) => r.endPage >= r.startPage)).default([]),
   model: z.string().max(160).nullable().optional(), analysisVersion: z.number().int().positive().default(1),
 });
-export const studySectionSchema = z.object({ label: z.string().trim().min(1).max(160), startPage: z.number().int().positive(), endPage: z.number().int().positive(), normalizedTextReference: z.string().max(10000).nullable().optional() }).refine((s) => s.endPage >= s.startPage);
+export const studySectionSchema = z.object({ label: z.string().trim().min(1).max(160), startPage: z.number().int().positive().nullable(), endPage: z.number().int().positive().nullable(), normalizedTextReference: z.string().max(10000).nullable().optional() }).refine((s) => (s.startPage === null && s.endPage === null) || (s.startPage !== null && s.endPage !== null && s.endPage >= s.startPage));
+
+/** Atomic compare-and-set: only an owned uploaded/failed row can be claimed. */
+export async function claimStudyProcessing(studyId: string) {
+  const id = idSchema.parse(studyId), profile = await getCurrentUserProfile(), db = getDb();
+  const staleBefore = new Date(Date.now() - 30 * 60_000);
+  const [claimed] = await db.update(studies).set({ status: "processing", processingError: null, updatedAt: new Date() })
+    .where(and(eq(studies.id, id), eq(studies.userId, profile.id), or(inArray(studies.status, ["uploaded", "failed"]), and(eq(studies.status, "processing"), lt(studies.updatedAt, staleBefore)))))
+    .returning();
+  if (claimed) return { kind: "claimed" as const, study: claimed };
+  const [existing] = await db.select().from(studies).where(and(eq(studies.id, id), eq(studies.userId, profile.id))).limit(1);
+  const owned = requireOwnedRecord(existing, profile.id);
+  return { kind: owned.status === "ready" ? "ready" as const : "processing" as const, study: owned };
+}
+
+export async function failStudyProcessing(studyId: string, safeError: string) {
+  const id = idSchema.parse(studyId), profile = await getCurrentUserProfile();
+  await getDb().update(studies).set({ status: "failed", processingError: safeError.slice(0, 1000), updatedAt: new Date() })
+    .where(and(eq(studies.id, id), eq(studies.userId, profile.id), eq(studies.status, "processing")));
+}
+
+export async function completeStudyProcessing(studyId: string, profileData: StudyProfile, model: string, sections: z.infer<typeof studySectionSchema>[]) {
+  const id = idSchema.parse(studyId), owner = await getCurrentUserProfile();
+  const profile = studyProfileSchema.parse(profileData);
+  const validatedSections = z.array(studySectionSchema).max(100).parse(sections);
+  return getDb().transaction(async (tx) => {
+    const [study] = await tx.select().from(studies).where(and(eq(studies.id, id), eq(studies.userId, owner.id))).for("update").limit(1);
+    const owned = requireOwnedRecord(study, owner.id);
+    if (owned.status !== "processing") throw new Error("Study is no longer processing.");
+    const [existing] = await tx.select().from(studyAnalyses).where(and(eq(studyAnalyses.studyId, id), eq(studyAnalyses.analysisVersion, 1))).limit(1);
+    if (!existing) {
+      const pages = owned.pageCount ? profile.importantPageRanges?.filter((r) => r.endPage <= owned.pageCount!) : [];
+      await tx.insert(studyAnalyses).values({ ...profile, importantPageRanges: pages, studyId: id, analysisVersion: 1, model });
+      await tx.delete(studySections).where(eq(studySections.studyId, id));
+      if (validatedSections.length) await tx.insert(studySections).values(validatedSections.map((s, position) => ({ ...s, position, studyId: id })));
+    }
+    await tx.update(studies).set({ status: "ready", processingError: null, updatedAt: new Date() }).where(eq(studies.id, id));
+  });
+}
+
+export async function getOwnedStudyProfile(studyId: string) {
+  const study = await getStudy(studyId);
+  const db = getDb();
+  const [analysis] = await db.select().from(studyAnalyses).where(eq(studyAnalyses.studyId, study.id)).orderBy(desc(studyAnalyses.analysisVersion)).limit(1);
+  const sections = await db.select().from(studySections).where(eq(studySections.studyId, study.id)).orderBy(studySections.position);
+  if (!analysis) return { study, profile: null, analysisVersion: null, sections };
+  const profile = studyProfileSchema.parse({ title: analysis.title, summary: analysis.summary, researchProblem: analysis.researchProblem, objectives: analysis.objectives, keywords: analysis.keywords, methodology: analysis.methodology, variablesOrConcepts: analysis.variablesOrConcepts, populationOrSample: analysis.populationOrSample, majorFindings: analysis.majorFindings, conclusion: analysis.conclusion, suggestedQueries: analysis.suggestedQueries, importantPageRanges: analysis.importantPageRanges });
+  return { study, profile, analysisVersion: analysis.analysisVersion, sections };
+}
 
 export async function createStudy(input: unknown) {
   const data = createStudySchema.parse(input), profile = await getCurrentUserProfile();

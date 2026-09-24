@@ -131,6 +131,7 @@ export const studies = createTable("study", {
 export const studyAnalyses = createTable("study_analysis", {
   id: uuid("id").defaultRandom().primaryKey(),
   studyId: uuid("study_id").notNull().references(() => studies.id, { onDelete: "cascade" }),
+  title: varchar("title", { length: 500 }),
   summary: text("summary").notNull(),
   researchProblem: text("research_problem"),
   objectives: jsonb("objectives").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
@@ -155,11 +156,12 @@ export const studySections = createTable("study_section", {
   id: uuid("id").defaultRandom().primaryKey(),
   studyId: uuid("study_id").notNull().references(() => studies.id, { onDelete: "cascade" }),
   label: varchar("label", { length: 160 }).notNull(),
-  startPage: integer("start_page").notNull(),
-  endPage: integer("end_page").notNull(),
+  position: integer("position").notNull().default(0),
+  startPage: integer("start_page"),
+  endPage: integer("end_page"),
   normalizedTextReference: text("normalized_text_reference"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [index("hccite_study_section_study_idx").on(table.studyId), check("hccite_study_section_pages_ck", sql`${table.startPage} > 0 and ${table.endPage} >= ${table.startPage}`)]);
+}, (table) => [index("hccite_study_section_study_idx").on(table.studyId), check("hccite_study_section_pages_ck", sql`(${table.startPage} is null and ${table.endPage} is null) or (${table.startPage} > 0 and ${table.endPage} >= ${table.startPage})`)]);
 
 export const studyRelatedSources = createTable("study_related_source", {
   id: uuid("id").defaultRandom().primaryKey(),
