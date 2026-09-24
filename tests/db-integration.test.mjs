@@ -10,10 +10,20 @@ import * as studiesRepo from "../src/server/repositories/studies.ts";
 import * as rrlRepo from "../src/server/repositories/rrl.ts";
 import { saveDiscoveredResource } from "../src/server/discovery/save.ts";
 
-const userA = "hccite-phase03-synthetic-user-a";
-const userB = "hccite-phase03-synthetic-user-b";
-const userC = "hccite-phase03-synthetic-cascade-user";
-const fixtureToken = "hccite-phase03-verification-20260923";
+// Every execution owns an unguessable namespace, so an interrupted or concurrent
+// run cannot wait on, assert against, or delete another run's fixtures.
+const fixtureToken = `hccite-dbtest-${process.pid}-${Date.now()}`;
+const userA = `${fixtureToken}-user-a`;
+const userB = `${fixtureToken}-user-b`;
+const userC = `${fixtureToken}-user-c`;
+const sharedResourceDoi = `10.5555/${fixtureToken}-shared`;
+const providerDoi = `10.5555/${fixtureToken}-provider`;
+const poisonDoi = `10.5555/${fixtureToken}-poison`;
+const ambiguousProviderId = `${fixtureToken}-openalex-ambiguous`;
+const isbn10Body = String(Date.now() % 1_000_000_000).padStart(9, "0");
+const isbn10Check = (11 - [...isbn10Body].reduce((sum, digit, index) => sum + Number(digit) * (10 - index), 0) % 11) % 11;
+const fixtureIsbn10 = `${isbn10Body}${isbn10Check === 10 ? "X" : isbn10Check}`;
+const fixtureIsbn13 = `978${fixtureIsbn10.slice(0, 9)}${(10 - ([...`978${fixtureIsbn10.slice(0, 9)}`].reduce((sum, digit, index) => sum + Number(digit) * (index % 2 ? 3 : 1), 0) % 10)) % 10}`;
 const db = getDb();
 const client = postgres(process.env.DATABASE_URL, { max: 1 });
 
@@ -23,10 +33,6 @@ const expectConstraint = async (operation, code = "23505") => {
 
 test("Phase 03 repository ownership, constraints, cascades, and live schema", async () => {
   try {
-    // Always start from a clean, clearly synthetic namespace in case a previous run was interrupted.
-    await client`delete from public.hccite_user_profile where clerk_user_id in (${userA}, ${userB}, ${userC})`;
-    await client`delete from public.hccite_resource where source_identifier like ${fixtureToken + "%"} or doi in ('10.5555/hccite-phase04.shared', '10.5555/hccite-phase04.poison') or source_identifier = 'W-hccite-phase04-ambiguous'`;
-
     setTestIdentity(userA);
     const collectionA = await collectionsRepo.createCollection({ name: "Synthetic A collection", description: "Phase 03 test fixture" });
     const studyA = await studiesRepo.createStudy({
@@ -35,19 +41,19 @@ test("Phase 03 repository ownership, constraints, cascades, and live schema", as
     });
     const resource = await resourcesRepo.createResource({
       type: "article", title: "Synthetic shared canonical resource", authors: ["Synthetic Author"], year: 2024,
-      doi: "10.5555/hccite-phase03.synthetic", source: "manual", sourceIdentifier: `${fixtureToken}-shared-resource`,
+      doi: sharedResourceDoi, source: "manual", sourceIdentifier: `${fixtureToken}-shared-resource`,
       url: "https://example.invalid/synthetic-resource", abstract: "Synthetic fixture only.",
     });
     const discoveredOpenAlex = await resourcesRepo.upsertDiscoveryResource({
       type: "article", title: "Synthetic provider conflict paper", authors: ["Synthetic Researcher"], year: 2022, publicationDate: "2022-04-01",
-      doi: "10.5555/hccite-phase04.shared", isbn: null, publisher: null, venue: "Synthetic Journal", source: "openalex",
+      doi: providerDoi, isbn: null, publisher: null, venue: "Synthetic Journal", source: "openalex",
       sourceIdentifier: `${fixtureToken}-openalex-shared`, url: "https://openalex.org/W-hccite-phase04-shared", abstract: null,
       retrievedAt: new Date("2026-09-23T00:00:00Z"), citationMetadata: { openAlexId: "W-hccite-phase04-shared" },
     });
     const discoveredCrossref = await resourcesRepo.upsertDiscoveryResource({
       type: "article", title: "Synthetic provider conflict paper", authors: ["Synthetic Researcher", "Synthetic Coauthor"], year: 2022, publicationDate: "2022-04-01",
-      doi: "https://doi.org/10.5555/HCCITE-PHASE04.SHARED", isbn: null, publisher: "Synthetic Press", venue: "Synthetic Journal", source: "crossref",
-      sourceIdentifier: "10.5555/hccite-phase04.shared", url: "https://doi.org/10.5555/hccite-phase04.shared", abstract: "Richer provider abstract.",
+      doi: `https://doi.org/${providerDoi.toUpperCase()}`, isbn: null, publisher: "Synthetic Press", venue: "Synthetic Journal", source: "crossref",
+      sourceIdentifier: providerDoi, url: `https://doi.org/${providerDoi}`, abstract: "Richer provider abstract.",
       retrievedAt: new Date("2026-09-23T00:01:00Z"), citationMetadata: { crossrefType: "journal-article" },
     });
     assert.equal(discoveredCrossref.reused, true, "equivalent normalized DOI forms must reuse one canonical Resource");
@@ -65,16 +71,16 @@ test("Phase 03 repository ownership, constraints, cascades, and live schema", as
       url: "https://books.google.com/", abstract: null, retrievedAt: new Date(), citationMetadata: {},
     });
     const [book10, book13] = await Promise.all([
-      resourcesRepo.upsertDiscoveryResource(bookInput("0306406152", "isbn10")),
-      resourcesRepo.upsertDiscoveryResource(bookInput("9780306406157", "isbn13")),
+      resourcesRepo.upsertDiscoveryResource(bookInput(fixtureIsbn10, "isbn10")),
+      resourcesRepo.upsertDiscoveryResource(bookInput(fixtureIsbn13, "isbn13")),
     ]);
     assert.equal(book10.resource.id, book13.resource.id, "concurrent ISBN-10 and equivalent ISBN-13 saves must reuse one canonical Resource");
     assert.equal([book10.reused, book13.reused].filter(Boolean).length, 1);
 
     const trueMetadata = {
       ...bookInput(null, "unused"), type: "article", title: "Authoritative Crossref fixture", authors: ["Real Fixture Author"],
-      year: 2023, doi: "10.5555/hccite-phase04.poison", isbn: null, source: "crossref",
-      sourceIdentifier: "10.5555/hccite-phase04.poison", citationMetadata: { provider: "crossref" },
+      year: 2023, doi: poisonDoi, isbn: null, source: "crossref",
+      sourceIdentifier: poisonDoi, citationMetadata: { provider: "crossref" },
     };
     const saveDependencies = {
       openalex: async () => assert.fail("wrong provider"),
@@ -96,7 +102,7 @@ test("Phase 03 repository ownership, constraints, cascades, and live schema", as
     });
     const ambiguousDiscovery = await resourcesRepo.upsertDiscoveryResource({
       type: "article", title: "Synthetic ambiguous title fallback", authors: ["Synthetic Fallback Author"], year: 2020,
-      publicationDate: null, doi: null, isbn: null, publisher: null, venue: null, source: "openalex", sourceIdentifier: `${fixtureToken}-openalex-ambiguous`,
+      publicationDate: null, doi: null, isbn: null, publisher: null, venue: null, source: "openalex", sourceIdentifier: ambiguousProviderId,
       url: "https://openalex.org/W-hccite-phase04-ambiguous", abstract: null, retrievedAt: new Date(), citationMetadata: {},
     });
     assert.equal(ambiguousDiscovery.reused, false);
@@ -238,10 +244,10 @@ test("Phase 03 repository ownership, constraints, cascades, and live schema", as
     assert.ok(tagA);
 
     // Normalized identifiers are globally unique; fixture uses synthetic identifiers only.
-    await expectConstraint(() => client`insert into public.hccite_resource (type, title, source, doi, source_identifier) values ('article', 'Synthetic duplicate DOI', 'manual', 'https://doi.org/10.5555/HCCITE-PHASE03.SYNTHETIC', ${fixtureToken + "-duplicate-doi"})`);
+    await expectConstraint(() => client`insert into public.hccite_resource (type, title, source, doi, source_identifier) values ('article', 'Synthetic duplicate DOI', 'manual', ${`https://doi.org/${sharedResourceDoi.toUpperCase()}`}, ${fixtureToken + "-duplicate-doi"})`);
     await client`insert into public.hccite_resource (type, title, source, source_identifier) values ('article', 'Synthetic provider ID', 'manual', ${fixtureToken + "-provider-unique"})`;
     await expectConstraint(() => client`insert into public.hccite_resource (type, title, source, source_identifier) values ('article', 'Synthetic provider ID duplicate', 'manual', ${fixtureToken + "-provider-unique"})`);
-    await expectConstraint(() => client`insert into public.hccite_resource (type, title, source, doi, source_identifier) values ('article', 'Synthetic duplicate DOI normalized', 'manual', 'doi:10.5555/hccite-phase03.synthetic', ${fixtureToken + "-duplicate-doi-2"})`);
+    await expectConstraint(() => client`insert into public.hccite_resource (type, title, source, doi, source_identifier) values ('article', 'Synthetic duplicate DOI normalized', 'manual', ${`doi:${sharedResourceDoi}`}, ${fixtureToken + "-duplicate-doi-2"})`);
 
     await resourcesRepo.removeSavedResource(savedA.id);
     assert.equal((await collectionsRepo.getCollection(collectionA.id)).items.length, 0);
@@ -275,7 +281,7 @@ test("Phase 03 repository ownership, constraints, cascades, and live schema", as
     assert.deepEqual(liveTables.map((row) => row.table_name), expectedTables);
   } finally {
     await client`delete from public.hccite_user_profile where clerk_user_id in (${userA}, ${userB}, ${userC})`;
-    await client`delete from public.hccite_resource where source_identifier like ${fixtureToken + "%"} or doi in ('10.5555/hccite-phase03.synthetic', '10.5555/hccite-phase04.shared', '10.5555/hccite-phase04.poison') or source_identifier = 'W-hccite-phase04-ambiguous'`;
+    await client`delete from public.hccite_resource where source_identifier like ${fixtureToken + "%"} or doi in (${sharedResourceDoi}, ${providerDoi}, ${poisonDoi}) or source_identifier = ${ambiguousProviderId}`;
     await client.end();
     await closeDb();
   }

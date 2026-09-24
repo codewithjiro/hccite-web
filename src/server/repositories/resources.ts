@@ -90,18 +90,19 @@ export async function upsertDiscoveryResource(input: unknown) {
     return { resource: updated ?? existing, reused: true, ambiguous: false };
   }
 
-  try {
-    const [created] = await tx.transaction(async (nested) => nested.insert(resources).values(incoming).returning());
-    return { resource: created!, reused: false, ambiguous: ambiguous.length > 0 };
-  } catch (error) {
-    // A simultaneous request can win a unique DOI/ISBN/provider-ID index after the lookup.
-    if (!error || typeof error !== "object" || !("code" in error) || error.code !== "23505") throw error;
-    const [raced] = conditions.length ? await tx.select().from(resources).where(or(...conditions)).limit(1) : [];
-    if (!raced) throw error;
-    const merged = mergeNormalizedResources(asNormalized(raced), incoming);
-    const [updated] = await tx.update(resources).set({ ...merged, updatedAt: new Date() }).where(eq(resources.id, raced.id)).returning();
-    return { resource: updated ?? raced, reused: true, ambiguous: false };
-  }
+  // Avoid a nested savepoint merely to handle a uniqueness race. In the postgres-js
+  // test client, concurrent nested transactions can leave the reserved connection
+  // unusable even after PostgreSQL has committed. A conflict-free insert result gives
+  // the same race signal without aborting or nesting the outer transaction.
+  const [created] = await tx.insert(resources).values(incoming).onConflictDoNothing().returning();
+  if (created) return { resource: created, reused: false, ambiguous: ambiguous.length > 0 };
+
+  // A simultaneous request won a DOI/ISBN/provider-ID unique index after our lookup.
+  const [raced] = conditions.length ? await tx.select().from(resources).where(or(...conditions)).limit(1) : [];
+  if (!raced) throw new Error("A canonical resource insert conflicted without a matching identifier.");
+  const merged = mergeNormalizedResources(asNormalized(raced), incoming);
+  const [updated] = await tx.update(resources).set({ ...merged, updatedAt: new Date() }).where(eq(resources.id, raced.id)).returning();
+  return { resource: updated ?? raced, reused: true, ambiguous: false };
   });
 }
 
