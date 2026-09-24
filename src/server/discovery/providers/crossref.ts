@@ -10,6 +10,11 @@ const workSchema = z.object({
   publisher: z.string().max(10_000).optional(), "container-title": z.array(z.string().max(10_000)).max(20).optional(), published: z.object({ "date-parts": z.array(z.array(z.number().int()).max(3)).max(5) }).optional(),
   "published-print": z.object({ "date-parts": z.array(z.array(z.number().int())) }).optional(), "published-online": z.object({ "date-parts": z.array(z.array(z.number().int())) }).optional(),
   URL: z.string().optional(), abstract: z.string().optional(), ISBN: z.array(z.string()).optional(), type: z.string().optional(),
+  "update-to": z.array(z.object({ DOI: z.string().max(512).optional(), type: z.string().max(200).optional(), label: z.string().max(10_000).optional(), source: z.string().max(100).optional(), updated: z.object({ "date-parts": z.array(z.array(z.number().int()).max(3)).max(5).optional(), "date-time": z.string().max(100).optional(), timestamp: z.number().finite().optional() }).passthrough().optional() }).passthrough()).max(100).optional(),
+  relation: z.record(z.string().max(200), z.array(z.union([z.string().max(512), z.object({ "id-type": z.string().max(100).optional(), id: z.string().max(512).optional(), "asserted-by": z.string().max(100).optional() }).passthrough()])).max(100)).optional(), "update-policy": z.string().url().max(10_000).optional(),
+  created: z.object({ "date-time": z.string().max(100).optional(), timestamp: z.number().finite().optional() }).passthrough().optional(),
+  deposited: z.object({ "date-time": z.string().max(100).optional(), timestamp: z.number().finite().optional() }).passthrough().optional(),
+  indexed: z.object({ "date-time": z.string().max(100).optional(), timestamp: z.number().finite().optional() }).passthrough().optional(),
 }).passthrough();
 const itemEnvelope = z.object({ message: workSchema }).passthrough();
 const searchEnvelope = z.object({ message: z.object({ items: z.array(workSchema), "total-results": z.number().int().nonnegative() }).passthrough() }).passthrough();
@@ -47,7 +52,60 @@ export async function lookupCrossrefDoi(input: string, options: { fetcher?: type
   let resource: NormalizedResource;
   try { resource = safeMap(parsed.data.message, new Date()); }
   catch { throw new ProviderError("crossref", "malformed_response", "Crossref record is missing usable metadata."); }
-  return { resource, doiFound: true, verification: "unknown" as const };
+  // This intentionally exposes only bounded, integrity-relevant Crossref fields.
+  // The caller never receives or persists the unbounded provider response.
+  const updateTo = (parsed.data.message["update-to"] ?? []).map((update) => ({
+    doi: normalizeDoi(update.DOI) ?? null, type: update.type?.trim().toLowerCase() ?? null,
+    label: update.label?.trim() || null, source: update.source?.trim().toLowerCase() ?? null,
+    updatedAt: update.updated?.["date-time"] ?? null,
+  }));
+  const relation = Object.entries(parsed.data.message.relation ?? {}).map(([type, identifiers]) => ({
+    type: type.trim().toLowerCase(), identifiers: identifiers.map((identifier) => {
+      if (typeof identifier === "string") return normalizeDoi(identifier);
+      return identifier["id-type"]?.toLowerCase() === "doi" ? normalizeDoi(identifier.id) : null;
+    }).filter((value): value is string => !!value),
+  }));
+  return {
+    resource, doiFound: true, verification: "unknown" as const,
+    integrityMetadata: {
+      doi, type: parsed.data.message.type?.trim().toLowerCase() ?? null,
+      title: parsed.data.message.title?.find((title) => title.trim())?.trim() ?? null,
+      authorCount: parsed.data.message.author?.length ?? 0, publicationDate: dateValue(parsed.data.message),
+      venue: parsed.data.message["container-title"]?.find((title) => title.trim())?.trim() ?? null,
+      publisher: parsed.data.message.publisher?.trim() || null, updatePolicy: parsed.data.message["update-policy"] ?? null,
+      updateTo, relation,
+      createdAt: parsed.data.message.created?.["date-time"] ?? null,
+      depositedAt: parsed.data.message.deposited?.["date-time"] ?? null,
+      indexedAt: parsed.data.message.indexed?.["date-time"] ?? null,
+    },
+  };
+}
+
+/**
+ * Crossref's `update-to` lives on the notice (for example a retraction notice),
+ * not necessarily on the original work. The documented `updates:<doi>` filter
+ * finds notices that update the requested canonical DOI. This is deliberately a
+ * server-only, fixed-host query and returns only bounded evidence fields.
+ */
+export async function lookupCrossrefIntegrityDoi(input: string, options: { fetcher?: typeof fetch; mailto?: string } = {}) {
+  const direct = await lookupCrossrefDoi(input, options);
+  const doi = direct.integrityMetadata.doi;
+  const mailto = options.mailto ?? env.CROSSREF_MAILTO;
+  if (!mailto) throw new ProviderError("crossref", "missing_credentials", "Crossref contact email is not configured.");
+  const url = new URL("https://api.crossref.org/works");
+  url.searchParams.set("filter", `updates:${doi}`); url.searchParams.set("rows", "20"); url.searchParams.set("mailto", mailto);
+  const payload = await providerJson<unknown>("crossref", url, { "User-Agent": `HCCite/0.1 (mailto:${mailto})` }, options.fetcher);
+  const parsed = searchEnvelope.safeParse(payload);
+  if (!parsed.success) throw new ProviderError("crossref", "malformed_response", "Crossref update response did not match the expected work format.");
+  const updates = parsed.data.message.items.flatMap((notice) => {
+    const noticeDoi = normalizeDoi(notice.DOI);
+    if (!noticeDoi) return [];
+    return (notice["update-to"] ?? []).flatMap((update) => normalizeDoi(update.DOI) === doi ? [{
+      doi: noticeDoi, type: update.type?.trim().toLowerCase() ?? null, label: update.label?.trim() || null,
+      source: update.source?.trim().toLowerCase() ?? null, updatedAt: update.updated?.["date-time"] ?? null,
+    }] : []);
+  });
+  return { ...direct, integrityMetadata: { ...direct.integrityMetadata, updateTo: updates } };
 }
 
 export async function searchCrossrefTitle(query: string, options: { fetcher?: typeof fetch; mailto?: string } = {}) {

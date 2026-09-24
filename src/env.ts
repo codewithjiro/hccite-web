@@ -14,7 +14,7 @@ export const env = createEnv({
     GEMINI_API_KEY: z.string().min(1).optional(),
     GEMINI_MODEL: z.string().min(1).default("gemini-3.8-flash"),
     MAX_STUDY_FILE_MB: z.coerce.number().positive().default(50),
-    INTEGRITY_CHECK_TTL_HOURS: z.coerce.number().positive().default(24),
+    INTEGRITY_CHECK_TTL_HOURS: z.coerce.number().finite().positive().max(24 * 365, "INTEGRITY_CHECK_TTL_HOURS must be at most one year.").default(24),
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   },
   client: {

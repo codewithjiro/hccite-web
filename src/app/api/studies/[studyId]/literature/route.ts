@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getOwnedStudyProfile } from "~/server/repositories/studies";
-import { associateLiteratureSource, listStudyRelatedSources, setLiteratureSelection } from "~/server/repositories/literature";
+import { associateLiteratureSource, listStudyRelatedSources, refreshStudyRelatedSourceIntegrity, setLiteratureSelection } from "~/server/repositories/literature";
 import { deriveLiteratureQueries, literatureQuerySchema } from "~/server/literature/core";
 import { searchLiterature } from "~/server/literature/search";
 
@@ -9,6 +9,7 @@ const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("search"), query: literatureQuerySchema }).strict(),
   z.object({ action: z.literal("associate"), locator: z.unknown() }).strict(),
   z.object({ action: z.literal("select"), associationId: z.string().uuid(), selected: z.boolean() }).strict(),
+  z.object({ action: z.literal("refreshIntegrity"), associationId: z.string().uuid() }).strict(),
 ]);
 const safeError = (error: unknown) => error instanceof z.ZodError ? error.issues[0]?.message ?? "Invalid request." : error instanceof Error ? error.message : "Request failed.";
 
@@ -29,8 +30,12 @@ export async function POST(request: Request, context: { params: Promise<{ studyI
       return NextResponse.json(await searchLiterature(body.query));
     }
     if (body.action === "associate") return NextResponse.json(await associateLiteratureSource(studyId, body.locator));
-    const association = await setLiteratureSelection(studyId, body);
-    return association ? NextResponse.json({ association }) : NextResponse.json({ error: "Source association not found." }, { status: 404 });
+    if (body.action === "refreshIntegrity") {
+      const result = await refreshStudyRelatedSourceIntegrity(studyId, body.associationId);
+      return result ? NextResponse.json(result) : NextResponse.json({ error: "Source association not found." }, { status: 404 });
+    }
+    const result = await setLiteratureSelection(studyId, body);
+    return result ? NextResponse.json(result) : NextResponse.json({ error: "Source association not found." }, { status: 404 });
   } catch (error) {
     const status = error instanceof z.ZodError || error instanceof SyntaxError ? 400 : 404;
     return NextResponse.json({ error: safeError(error) }, { status });

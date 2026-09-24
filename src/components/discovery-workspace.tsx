@@ -70,7 +70,7 @@ export function DiscoveryWorkspace({ kind }: { kind: DiscoveryKind }) {
       setTotal(payload.total ?? found.length);
       setHasMore(payload.hasMore ?? false);
       setPage(nextPage); setStartIndex(nextStartIndex);
-      if (payload.doiFound) setStatus("Crossref metadata found. DOI verification remains unknown in this phase.");
+      if (payload.doiFound) setStatus("Crossref metadata found. Save or associate this canonical source to check Source Health; a DOI string alone is not verification.");
       if (!found.length) setStatus("No matching records were returned.");
     } catch (caught) {
       const providerError = caught && typeof caught === "object" && "message" in caught

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { isbn10FromIsbn13, isbn13FromIsbn10, mergeNormalizedResources, normalizeDoi, normalizeIsbn, normalizedResourceSchema, conservativeTitleCandidates } from "../src/server/discovery/normalization.ts";
 import { getOpenAlexWorkById, searchOpenAlex } from "../src/server/discovery/providers/openalex.ts";
-import { lookupCrossrefDoi, normalizeDoiInput, searchCrossrefTitle } from "../src/server/discovery/providers/crossref.ts";
+import { lookupCrossrefDoi, lookupCrossrefIntegrityDoi, normalizeDoiInput, searchCrossrefTitle } from "../src/server/discovery/providers/crossref.ts";
 import { getGoogleBookById, searchGoogleBooks } from "../src/server/discovery/providers/google-books.ts";
 import { ProviderError } from "../src/server/discovery/providers/shared.ts";
 import { discoverySaveLocatorSchema } from "../src/server/discovery/locator.ts";
@@ -76,6 +76,20 @@ test("Crossref normalizes DOI lookup, keeps verification unknown, and handles no
   await assert.rejects(lookupCrossrefDoi("10.5555/missing", { mailto: "test@example.org", fetcher: async () => new Response("{}", { status: 404 }) }), (error) => error.code === "not_found");
   await assert.rejects(searchCrossrefTitle("x", { mailto: "test@example.org", fetcher: async () => new Response("{}", { status: 200 }) }), (error) => error.code === "malformed_response");
   await assert.rejects(lookupCrossrefDoi("10.5555/example", { mailto: "", fetcher }), (error) => error.code === "missing_credentials");
+});
+
+test("Crossref integrity lookup uses the documented updates filter so original DOI receives update evidence", async () => {
+  const original = { DOI: "10.5555/original", title: ["Original article"], author: [{ name: "Fixture Author" }], publisher: "Fixture", "container-title": ["Fixture Journal"], published: { "date-parts": [[2024, 1, 1]] } };
+  const notice = { DOI: "10.5555/retraction-notice", title: ["Retraction"], "update-to": [{ DOI: "10.5555/original", type: "retraction", label: "Retraction", source: "retraction-watch", updated: { "date-time": "2025-01-01T00:00:00Z" } }] };
+  let updateRequest = false;
+  const result = await lookupCrossrefIntegrityDoi("10.5555/original", { mailto: "fixture@example.org", fetcher: async (input) => {
+    const url = new URL(input);
+    if (url.pathname.endsWith("/works/10.5555%2Foriginal") || decodeURIComponent(url.pathname).endsWith("/works/10.5555/original")) return new Response(JSON.stringify({ message: original }));
+    updateRequest = url.searchParams.get("filter") === "updates:10.5555/original";
+    return new Response(JSON.stringify({ message: { items: [notice], "total-results": 1 } }));
+  } });
+  assert.equal(updateRequest, true);
+  assert.deepEqual(result.integrityMetadata.updateTo, [{ doi: "10.5555/retraction-notice", type: "retraction", label: "Retraction", source: "retraction-watch", updatedAt: "2025-01-01T00:00:00Z" }]);
 });
 
 test("Google Books handles empty and sparse records, validates URLs, and surfaces configuration errors", async () => {
