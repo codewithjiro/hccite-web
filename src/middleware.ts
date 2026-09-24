@@ -1,6 +1,6 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
 import { NextResponse, type NextRequest } from "next/server";
-import { isPrivatePath } from "~/lib/auth-routes";
+import { apiAuthDecision, isPrivatePath, isUploadThingCallbackPath } from "~/lib/auth-routes";
 
 const clerkConfigured = Boolean(
   process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY,
@@ -8,11 +8,13 @@ const clerkConfigured = Boolean(
 
 const withClerk = clerkConfigured
   ? clerkMiddleware(async (auth, request) => {
+      if (isUploadThingCallbackPath(request.nextUrl.pathname)) return;
       if (!isPrivatePath(request.nextUrl.pathname)) return;
 
       if (request.nextUrl.pathname.startsWith("/api/")) {
         const { userId } = await auth();
-        if (!userId) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+        const decision = apiAuthDecision(request.nextUrl.pathname, userId);
+        if (decision === "deny") return NextResponse.json({ error: "Authentication required" }, { status: 401 });
         return;
       }
 

@@ -7,6 +7,7 @@ import { env, requireServerEnv } from "~/env";
 import { createStudyForClerkUser } from "~/server/repositories/studies";
 import { STUDY_DOCX_MIME, validateStudyFile } from "./file-validation";
 import { deleteStorageObject } from "./storage-deletion";
+import { isUploadInitiationAuthenticated } from "~/lib/auth-routes";
 
 const f = createUploadthing();
 const maxBytes = Math.floor(env.MAX_STUDY_FILE_MB * 1024 * 1024);
@@ -30,7 +31,7 @@ export const uploadRouter = {
   studyDocument: f({ blob: { maxFileSize: maxSize as unknown as "64MB", maxFileCount: 1 } })
     .middleware(async ({ files }) => {
       const { userId } = await auth();
-      if (!userId) throw new UploadThingError("Sign in before uploading a study.");
+      if (!isUploadInitiationAuthenticated(userId)) throw new UploadThingError("Sign in before uploading a study.");
       const file = files[0];
       if (!file || files.length !== 1 || file.size > maxBytes) throw new UploadThingError(`Upload one PDF or DOCX no larger than ${env.MAX_STUDY_FILE_MB} MB.`);
       const ext = /\.([a-z0-9]+)$/i.exec(file.name)?.[1]?.toLowerCase();
