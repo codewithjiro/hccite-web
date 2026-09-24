@@ -1,0 +1,9 @@
+# Phase 08 handoff
+
+The literature workspace reads the latest persisted `StudyAnalysis` through the owner-filtered Study Profile repository. It never reads or resends the original PDF/DOCX. Suggested queries are reused first, then bounded concepts are composed from keywords, variables, the research problem, one objective, and methodology. UI edits are transient and do not update the Profile.
+
+OpenAlex discovers scholarly works. Google Books runs only for book-relevant query terms. Up to eight DOI-bearing scholarly results are enriched through Crossref; enrichment failure preserves the OpenAlex result and becomes a provider warning. Results dedupe only by normalized DOI, equivalent ISBN-10/ISBN-13, or an exact provider identity. Existing Phase 04 merging preserves canonical stronger metadata, provenance, and disagreements.
+
+Association accepts only a validated provider locator. The server refetches that locator, verifies the returned identity, uses the Phase 04 canonical Resource upsert, and upserts the unique `(studyId, resourceId)` `StudyRelatedSource`. It does not create a `SavedResource`. Gemini receives only bounded Profile fields and provider metadata/context. `relevanceReason` is an AI-generated retrieval explanation and `relevanceScore` is relevance from 0–1, never quality or integrity. Existing relevance is reused. Failure leaves the canonical source and association intact.
+
+`selectedForRrl` is an owner-checked, idempotent boolean on `StudyRelatedSource`. Future Phase 09 work should attach integrity evidence to the canonical `Resource` through `ResourceIntegrityCheck` without changing relevance. Until then the workspace displays integrity as unknown/not checked. Future RRL generation may safely consume the selected canonical metadata, legitimate abstract/book description, persisted relevance, and Study Profile, but must retain the selected-source allow-list and must not infer unavailable source findings.
