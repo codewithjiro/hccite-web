@@ -39,11 +39,27 @@ test("Phase 03 repository ownership, constraints, cascades, and live schema", as
       title: "Synthetic A study", originalFileName: "synthetic-a.pdf", fileType: "pdf",
       fileUrl: "https://example.invalid/hccite-phase03/synthetic-a.pdf", fileStorageKey: `${fixtureToken}-a-study-file`, pageCount: 4,
     });
+    const retriedStudyA = await studiesRepo.createStudy({
+      title: "Retry must not duplicate", originalFileName: "synthetic-a.pdf", fileType: "pdf",
+      fileUrl: "https://example.invalid/hccite-phase03/synthetic-a.pdf", fileStorageKey: `${fixtureToken}-a-study-file`, pageCount: 4,
+    });
+    assert.equal(retriedStudyA.id, studyA.id, "repeated UploadThing completion for one storage key is idempotent");
     const resource = await resourcesRepo.createResource({
       type: "article", title: "Synthetic shared canonical resource", authors: ["Synthetic Author"], year: 2024,
       doi: sharedResourceDoi, source: "manual", sourceIdentifier: `${fixtureToken}-shared-resource`,
       url: "https://example.invalid/synthetic-resource", abstract: "Synthetic fixture only.",
     });
+    const deleteRetryStudy = await studiesRepo.createStudy({
+      title: "Synthetic deletion retry", originalFileName: "delete-retry.pdf", fileType: "pdf",
+      fileUrl: "https://example.invalid/hccite-phase06/delete-retry.pdf", fileStorageKey: `${fixtureToken}-delete-retry`,
+    });
+    await studiesRepo.saveStudyAnalysis(deleteRetryStudy.id, { summary: "Synthetic deletion child" });
+    await assert.rejects(studiesRepo.deleteStudy(deleteRetryStudy.id, async () => { throw new Error("storage unavailable"); }));
+    assert.equal((await studiesRepo.getStudy(deleteRetryStudy.id)).id, deleteRetryStudy.id, "storage failure keeps metadata available for a safe retry");
+    let deletedKey = null;
+    await studiesRepo.deleteStudy(deleteRetryStudy.id, async (key) => { deletedKey = key; });
+    assert.equal(deletedKey, `${fixtureToken}-delete-retry`);
+    assert.equal((await client`select count(*)::int as count from public.hccite_study_analysis where study_id = ${deleteRetryStudy.id}`)[0].count, 0, "study deletion cascades dependent analysis rows");
     const discoveredOpenAlex = await resourcesRepo.upsertDiscoveryResource({
       type: "article", title: "Synthetic provider conflict paper", authors: ["Synthetic Researcher"], year: 2022, publicationDate: "2022-04-01",
       doi: providerDoi, isbn: null, publisher: null, venue: "Synthetic Journal", source: "openalex",

@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requireOwnedRecord } from "~/server/auth";
 import { getDb } from "~/server/db";
 import { resources, studies, studyAnalyses, studyRelatedSources, studySections } from "~/server/db/schema";
-import { getCurrentUserProfile } from "./profiles";
+import { getCurrentUserProfile, getProfileForClerkUserId } from "./profiles";
 
 const idSchema = z.string().uuid();
 export const createStudySchema = z.object({
@@ -26,8 +26,23 @@ export const studySectionSchema = z.object({ label: z.string().trim().min(1).max
 
 export async function createStudy(input: unknown) {
   const data = createStudySchema.parse(input), profile = await getCurrentUserProfile();
-  const [row] = await getDb().insert(studies).values({ ...data, userId: profile.id }).returning();
-  return row;
+  return createStudyForProfile(profile.id, data);
+}
+
+/** Used only by the authenticated UploadThing completion callback; never accept this ID from a browser body. */
+export async function createStudyForClerkUser(clerkUserId: string, input: unknown) {
+  const data = createStudySchema.parse(input);
+  const profile = await getProfileForClerkUserId(clerkUserId);
+  return createStudyForProfile(profile.id, data);
+}
+
+async function createStudyForProfile(profileId: string, data: z.infer<typeof createStudySchema>) {
+  const db = getDb();
+  const [created] = await db.insert(studies).values({ ...data, userId: profileId }).onConflictDoNothing().returning();
+  if (created) return created;
+  const [existing] = await db.select().from(studies).where(eq(studies.fileStorageKey, data.fileStorageKey)).limit(1);
+  if (!existing || existing.userId !== profileId) throw new Error("Study storage identity could not be persisted safely.");
+  return existing;
 }
 
 export async function listStudies() {

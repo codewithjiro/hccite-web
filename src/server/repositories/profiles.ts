@@ -13,6 +13,11 @@ export async function getCurrentUserProfile() {
   const displayName = clerkUser?.id === clerkUserId
     ? [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ").trim() || clerkUser.username || null
     : null;
+  return getProfileForClerkUserId(clerkUserId, displayName);
+}
+
+/** Internal server callback helper. Its caller must already have authenticated the Clerk principal. */
+export async function getProfileForClerkUserId(clerkUserId: string, displayName: string | null = null) {
   const db = getDb();
   const [profile] = await db.insert(userProfiles)
     .values({ clerkUserId, displayName })
