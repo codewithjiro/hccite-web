@@ -169,7 +169,7 @@ test("Phase 03 repository ownership, constraints, cascades, and live schema", as
     assert.equal(citationSourceRows.length, 1, "draft repository must persist its selected-source allow-list");
     assert.equal(citationSourceRows[0].resource_id, resource.id);
     assert.equal(citationSourceRows[0].selected_at_generation, true);
-    await client`insert into public.hccite_rrl_citation_link (draft_id, resource_id, citation_key) values (${draftA.id}, ${resource.id}, 'synthetic-key')`;
+    await client`insert into public.hccite_rrl_citation_link (draft_id, resource_id, citation_key, occurrence) values (${draftA.id}, ${resource.id}, 'synthetic-key', 1)`;
     const profileA = studyOwnerCheck.profile_id;
 
     setTestIdentity(userB);
@@ -265,9 +265,9 @@ test("Phase 03 repository ownership, constraints, cascades, and live schema", as
     await expectConstraint(() => client`insert into public.hccite_study_related_source (study_id, resource_id) values (${studyA.id}, ${resource.id})`);
     assert.equal((await client`select id from public.hccite_study where id = ${studyA.id}`).length, 1, "User A study must still exist before draft-scope constraint checks");
     const secondDraft = await client`insert into public.hccite_rrl_draft (study_id, citation_style, content, content_hash) values (${studyA.id}, 'apa', 'Synthetic second draft', 'synthetic-hash') returning id`;
-    await client`insert into public.hccite_rrl_citation_link (draft_id, resource_id, citation_key) values (${draftA.id}, ${resource.id}, 'draft-scoped-key')`;
-    await expectConstraint(() => client`insert into public.hccite_rrl_citation_link (draft_id, resource_id, citation_key) values (${draftA.id}, ${resource.id}, 'draft-scoped-key')`);
-    await client`insert into public.hccite_rrl_citation_link (draft_id, resource_id, citation_key) values (${secondDraft[0].id}, ${resource.id}, 'draft-scoped-key')`;
+    await client`insert into public.hccite_rrl_citation_link (draft_id, resource_id, citation_key, occurrence) values (${draftA.id}, ${resource.id}, 'draft-scoped-key', 2)`;
+    await expectConstraint(() => client`insert into public.hccite_rrl_citation_link (draft_id, resource_id, citation_key, occurrence) values (${draftA.id}, ${resource.id}, 'another-occurrence', 2)`);
+    await client`insert into public.hccite_rrl_citation_link (draft_id, resource_id, citation_key, occurrence) values (${secondDraft[0].id}, ${resource.id}, 'draft-scoped-key', 1)`;
     assert.ok(tagA);
 
     // Normalized identifiers are globally unique; fixture uses synthetic identifiers only.

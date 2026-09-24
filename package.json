@@ -22,6 +22,7 @@
     "test:literature": "node --experimental-strip-types --import ./tests/discovery-test-loader.mjs --test tests/literature.test.mjs",
     "test:integrity": "node --experimental-strip-types --import ./tests/discovery-test-loader.mjs --test tests/integrity.test.mjs",
     "test:rrl": "node --experimental-strip-types --import ./tests/discovery-test-loader.mjs --test tests/rrl.test.mjs",
+    "test:rrl-audit": "node --experimental-strip-types --import ./tests/discovery-test-loader.mjs --test tests/rrl-audit.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

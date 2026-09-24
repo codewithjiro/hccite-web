@@ -15,7 +15,7 @@ import { generateRrlWithGemini, type RrlGeminiInput } from "./gemini";
 const id = z.string().uuid();
 export const generateRrlInputSchema = z.object({ citationStyle: z.enum(["apa", "mla", "chicago"]), generationRequestId: id, confirmRetractedSourceIds: z.array(id).max(1000).default([]) }).strict();
 
-type Selected = { associationId: string; resource: typeof resources.$inferSelect };
+type Selected = { associationId: string; relevanceReason: string | null; resource: typeof resources.$inferSelect };
 const integrityWarning = (check: { status: string; updateLabel: string | null } | null) => check?.updateLabel ?? (check?.status === "unknown" ? "Integrity metadata is unknown; it is not a clean result." : null);
 
 /** Resolves selected sources afresh from the owner-scoped Study; no browser source metadata is authoritative. */
@@ -28,7 +28,7 @@ export async function getRrlWorkspace(studyId: string) {
 }
 
 async function getSelectedSources(studyId: string): Promise<Selected[]> {
-  const rows = await getDb().select({ associationId: studyRelatedSources.id, resource: resources }).from(studyRelatedSources).innerJoin(resources, eq(resources.id, studyRelatedSources.resourceId)).where(and(eq(studyRelatedSources.studyId, studyId), eq(studyRelatedSources.selectedForRrl, true)));
+  const rows = await getDb().select({ associationId: studyRelatedSources.id, relevanceReason: studyRelatedSources.relevanceReason, resource: resources }).from(studyRelatedSources).innerJoin(resources, eq(resources.id, studyRelatedSources.resourceId)).where(and(eq(studyRelatedSources.studyId, studyId), eq(studyRelatedSources.selectedForRrl, true)));
   // Stable token positions are ordered by canonical title then UUID, never browser order.
   return rows.sort((a, b) => a.resource.title.localeCompare(b.resource.title) || a.resource.id.localeCompare(b.resource.id));
 }
@@ -47,7 +47,7 @@ export async function generateOwnedRrl(studyId: string, rawInput: unknown, overr
   const sources = selected.map((item, index) => {
     const health = integrity[index]?.check ?? null;
     return { resourceId: item.resource.id, citationKey: `HCCITE:S${index + 1}`, sourceSnapshot: {
-      title: item.resource.title, authors: item.resource.authors, year: item.resource.year, type: item.resource.type, venue: item.resource.venue, publisher: item.resource.publisher, doi: item.resource.doi, isbn: item.resource.isbn, abstract: item.resource.abstract, source: item.resource.source, sourceIdentifier: item.resource.sourceIdentifier, url: item.resource.url, selectedStudyRelatedSourceId: item.associationId, contextAvailability: item.resource.abstract ? "abstract_available" : "title_only", integrity: health ? { status: health.status, updateLabel: health.updateLabel, checkedAt: health.checkedAt.toISOString() } : { status: "unknown", updateLabel: "Integrity status is unavailable." },
+      title: item.resource.title, authors: item.resource.authors, year: item.resource.year, type: item.resource.type, venue: item.resource.venue, publisher: item.resource.publisher, doi: item.resource.doi, isbn: item.resource.isbn, abstract: item.resource.abstract, source: item.resource.source, sourceIdentifier: item.resource.sourceIdentifier, url: item.resource.url, selectedStudyRelatedSourceId: item.associationId, relevanceReason: item.relevanceReason, contextAvailability: item.resource.abstract ? "abstract_available" : "title_only", integrity: health ? { status: health.status, updateLabel: health.updateLabel, checkedAt: health.checkedAt.toISOString() } : { status: "unknown", updateLabel: "Integrity status is unavailable." },
     } };
   });
   const geminiInput: RrlGeminiInput = { profile: owned.profile as unknown as Record<string, unknown>, citationStyle: input.citationStyle, sources: sources.map((source) => ({

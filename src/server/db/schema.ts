@@ -31,7 +31,7 @@ export const studyStatusEnum = pgEnum("hccite_study_status", ["uploaded", "proce
 export const integrityStatusEnum = pgEnum("hccite_integrity_status", ["no_known_issue", "review_required", "corrected", "retracted", "unknown"]);
 export const updateTypeEnum = pgEnum("hccite_update_type", ["correction", "retraction", "expression_of_concern", "other"]);
 export const citationStyleEnum = pgEnum("hccite_citation_style", ["apa", "mla", "chicago"]);
-export const auditStatusEnum = pgEnum("hccite_audit_status", ["passed", "review_required", "failed"]);
+export const auditStatusEnum = pgEnum("hccite_audit_status", ["passed", "review_required", "failed", "stale"]);
 
 export const userProfiles = createTable("user_profile", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -221,11 +221,13 @@ export const rrlCitationLinks = createTable("rrl_citation_link", {
   draftId: uuid("draft_id").notNull().references(() => rrlDrafts.id, { onDelete: "cascade" }),
   resourceId: uuid("resource_id").notNull().references(() => resources.id, { onDelete: "cascade" }),
   citationKey: varchar("citation_key", { length: 160 }).notNull(),
+  occurrence: integer("occurrence").notNull().default(1),
   sectionKey: varchar("section_key", { length: 160 }),
+  heading: varchar("heading", { length: 240 }),
   contextSnippet: text("context_snippet"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
-  uniqueIndex("hccite_rrl_citation_draft_key_uq").on(table.draftId, table.citationKey),
+  uniqueIndex("hccite_rrl_citation_draft_occurrence_uq").on(table.draftId, table.occurrence),
   index("hccite_rrl_citation_draft_idx").on(table.draftId),
   index("hccite_rrl_citation_resource_idx").on(table.resourceId),
 ]);
@@ -235,7 +237,11 @@ export const rrlAudits = createTable("rrl_audit", {
   draftId: uuid("draft_id").notNull().references(() => rrlDrafts.id, { onDelete: "cascade" }),
   draftVersion: integer("draft_version").notNull(),
   draftContentHash: varchar("draft_content_hash", { length: 128 }).notNull(),
+  sourceStateHash: varchar("source_state_hash", { length: 128 }),
   status: auditStatusEnum("status").notNull(),
+  selectedSourceCount: integer("selected_source_count").notNull().default(0),
+  mappedSourceCount: integer("mapped_source_count").notNull().default(0),
+  citationOccurrenceCount: integer("citation_occurrence_count").notNull().default(0),
   citationsTotal: integer("citations_total").notNull().default(0),
   citationsMapped: integer("citations_mapped").notNull().default(0),
   doisVerified: integer("dois_verified").notNull().default(0),
@@ -243,9 +249,10 @@ export const rrlAudits = createTable("rrl_audit", {
   reviewRequiredCount: integer("review_required_count").notNull().default(0),
   duplicateCount: integer("duplicate_count").notNull().default(0),
   unselectedReferenceCount: integer("unselected_reference_count").notNull().default(0),
+  issues: jsonb("issues").$type<Array<{ code: string; severity: string; message: string; citationKey?: string; occurrence?: number; resourceId?: string; sectionKey?: string | null }>>().notNull().default(sql`'[]'::jsonb`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index("hccite_rrl_audit_draft_created_idx").on(table.draftId, table.createdAt),
   check("hccite_rrl_audit_version_ck", sql`${table.draftVersion} > 0`),
-  check("hccite_rrl_audit_counts_ck", sql`${table.citationsTotal} >= 0 and ${table.citationsMapped} >= 0 and ${table.doisVerified} >= 0 and ${table.retractedCount} >= 0 and ${table.reviewRequiredCount} >= 0 and ${table.duplicateCount} >= 0 and ${table.unselectedReferenceCount} >= 0`),
+  check("hccite_rrl_audit_counts_ck", sql`${table.selectedSourceCount} >= 0 and ${table.mappedSourceCount} >= 0 and ${table.citationOccurrenceCount} >= 0 and ${table.citationsTotal} >= 0 and ${table.citationsMapped} >= 0 and ${table.doisVerified} >= 0 and ${table.retractedCount} >= 0 and ${table.reviewRequiredCount} >= 0 and ${table.duplicateCount} >= 0 and ${table.unselectedReferenceCount} >= 0`),
 ]);

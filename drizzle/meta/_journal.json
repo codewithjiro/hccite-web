@@ -43,6 +43,13 @@
       "when": 1790242677059,
       "tag": "0005_closed_salo",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790245625163,
+      "tag": "0006_smooth_iron_lad",
+      "breakpoints": true
     }
   ]
 }

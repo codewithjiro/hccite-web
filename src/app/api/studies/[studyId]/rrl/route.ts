@@ -1,18 +1,21 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { bibliographyForSnapshot, generateOwnedRrl, getRrlWorkspace } from "~/server/rrl/service";
-import { getRrlDraft, listRrlDraftsForStudy, updateRrlDraft } from "~/server/repositories/rrl";
+import { getFinalRrlExport, getRrlCitationDetail, getRrlDraft, listRrlDraftsForStudy, runRrlAudit, updateRrlDraft } from "~/server/repositories/rrl";
 import { safeRrlGeminiError } from "~/server/rrl/gemini";
 
 const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("generate"), citationStyle: z.enum(["apa", "mla", "chicago"]), generationRequestId: z.string().uuid(), confirmRetractedSourceIds: z.array(z.string().uuid()).max(1000).default([]) }).strict(),
   z.object({ action: z.literal("saveEdit"), draftId: z.string().uuid(), content: z.string().trim().min(1).max(500000), citationStyle: z.enum(["apa", "mla", "chicago"]).optional() }).strict(),
   z.object({ action: z.literal("getDraft"), draftId: z.string().uuid() }).strict(),
+  z.object({ action: z.literal("audit"), draftId: z.string().uuid() }).strict(),
+  z.object({ action: z.literal("export"), draftId: z.string().uuid() }).strict(),
+  z.object({ action: z.literal("citationDetail"), draftId: z.string().uuid(), citationKey: z.string().regex(/^HCCITE:S[1-9]\d*$/) }).strict(),
 ]);
 
 function safeError(error: unknown) {
   if (error instanceof z.ZodError || error instanceof SyntaxError) return "Invalid RRL request.";
-  if (error instanceof Error && /Gemini|RRL generation|unmapped|citation list|ready saved|Select at least|no longer selected/.test(error.message)) return error.message;
+  if (error instanceof Error && /Gemini|RRL generation|unmapped|citation list|ready saved|Select at least|no longer selected|audit|copy\/export|Draft changed|current persisted/.test(error.message)) return error.message;
   return "Study or RRL draft not found.";
 }
 
@@ -42,6 +45,22 @@ export async function POST(request: Request, context: { params: Promise<{ studyI
       const draft = await updateRrlDraft(body.draftId, { content: body.content, citationStyle: body.citationStyle });
       if (!draft || draft.studyId !== studyId) return NextResponse.json({ error: "RRL draft not found." }, { status: 404 });
       return NextResponse.json({ draft: serializeDraft(await getRrlDraft(draft.id)) });
+    }
+    if (body.action === "audit") {
+      const existing = await getRrlDraft(body.draftId);
+      if (existing.draft.studyId !== studyId) return NextResponse.json({ error: "RRL draft not found." }, { status: 404 });
+      const result = await runRrlAudit(body.draftId);
+      return NextResponse.json({ audit: result.audit, evaluation: result.evaluation, draft: serializeDraft(await getRrlDraft(body.draftId)) });
+    }
+    if (body.action === "citationDetail") {
+      const existing = await getRrlDraft(body.draftId);
+      if (existing.draft.studyId !== studyId) return NextResponse.json({ error: "RRL draft not found." }, { status: 404 });
+      return NextResponse.json({ detail: await getRrlCitationDetail(body.draftId, body.citationKey) });
+    }
+    if (body.action === "export") {
+      const existing = await getRrlDraft(body.draftId);
+      if (existing.draft.studyId !== studyId) return NextResponse.json({ error: "RRL draft not found." }, { status: 404 });
+      return NextResponse.json({ export: await getFinalRrlExport(body.draftId) });
     }
     const draft = await getRrlDraft(body.draftId);
     if (draft.draft.studyId !== studyId) return NextResponse.json({ error: "RRL draft not found." }, { status: 404 });
