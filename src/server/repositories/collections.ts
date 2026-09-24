@@ -93,7 +93,9 @@ export async function attachTag(savedResourceId: string, tagId: string) {
   const [tag] = await db.select({ id: tags.id }).from(tags).where(and(eq(tags.id, tagKey), eq(tags.userId, profile.id))).limit(1);
   requireOwnedRecord(tag && { ...tag, userId: profile.id }, profile.id);
   const [link] = await db.insert(resourceTags).values({ savedResourceId: savedId, tagId: tagKey }).onConflictDoNothing().returning();
-  return link ?? null;
+  if (link) return link;
+  const [existing] = await db.select().from(resourceTags).where(and(eq(resourceTags.savedResourceId, savedId), eq(resourceTags.tagId, tagKey))).limit(1);
+  return existing ?? null;
 }
 
 export async function removeTag(savedResourceId: string, tagId: string) {

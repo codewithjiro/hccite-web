@@ -106,6 +106,19 @@ test("Phase 03 repository ownership, constraints, cascades, and live schema", as
     assert.equal((await resourcesRepo.saveResource({ resourceId: resource.id })).id, savedA.id, "saving twice keeps one personal row");
     const tagForA = await collectionsRepo.createTag({ name: "Private phase 05 tag" });
     await collectionsRepo.attachTag(savedA.id, tagForA.id);
+    assert.equal((await collectionsRepo.attachTag(savedA.id, tagForA.id)).tagId, tagForA.id, "tag attachment is idempotent");
+    const removableTag = await collectionsRepo.createTag({ name: "Private removable phase 05 tag" });
+    await collectionsRepo.attachTag(savedA.id, removableTag.id);
+    await collectionsRepo.removeTag(savedA.id, removableTag.id);
+    assert.equal((await collectionsRepo.listLibraryLinks()).tagLinks.some((link) => link.tagId === removableTag.id), false, "tag removal removes only the relationship");
+    await collectionsRepo.attachTag(savedA.id, removableTag.id);
+    assert.equal(await collectionsRepo.deleteTag(removableTag.id), true, "owned tag deletion succeeds");
+    assert.equal((await collectionsRepo.listTags()).some((tag) => tag.id === removableTag.id), false, "deleted tag is no longer listed");
+    const disposableCollectionA = await collectionsRepo.createCollection({ name: "Synthetic A removable collection" });
+    await collectionsRepo.addResourceToCollection(disposableCollectionA.id, resource.id);
+    await collectionsRepo.removeResourceFromCollection(disposableCollectionA.id, resource.id);
+    assert.equal((await collectionsRepo.getCollection(disposableCollectionA.id)).items.length, 0, "membership removal preserves the collection");
+    await collectionsRepo.addResourceToCollection(disposableCollectionA.id, resource.id);
     await resourcesRepo.updateSavedResource(savedA.id, { notes: "Private phase 05 note", readingStatus: "reading" });
     assert.equal((await collectionsRepo.addResourceToCollection(collectionA.id, resource.id)).resourceId, resource.id, "membership add is idempotent");
     assert.equal((await collectionsRepo.createCollection({ name: "synthetic a COLLECTION" })).id, collectionA.id, "collection uniqueness ignores case per user");
@@ -129,6 +142,7 @@ test("Phase 03 repository ownership, constraints, cascades, and live schema", as
     setTestIdentity(userB);
     const collectionB = await collectionsRepo.createCollection({ name: "Synthetic B collection" });
     const savedB = await resourcesRepo.saveResource({ resourceId: resource.id });
+    await collectionsRepo.addResourceToCollection(collectionB.id, resource.id);
     const studyB = await studiesRepo.createStudy({
       title: "Synthetic B study", originalFileName: "synthetic-b.pdf", fileType: "pdf",
       fileUrl: "https://example.invalid/hccite-phase03/synthetic-b.pdf", fileStorageKey: `${fixtureToken}-b-study-file`,
@@ -138,6 +152,14 @@ test("Phase 03 repository ownership, constraints, cascades, and live schema", as
     const profileC = (await client`select u.id from public.hccite_user_profile u where u.clerk_user_id = ${userC}`)[0]?.id;
     assert.ok(profileC, "synthetic User C profile must exist for owner-scoped tag uniqueness verification");
     setTestIdentity(userB);
+
+    setTestIdentity(userA);
+    await collectionsRepo.deleteCollection(disposableCollectionA.id);
+    assert.equal((await resourcesRepo.getResource(resource.id)).id, resource.id, "deleting a collection does not delete canonical metadata");
+    assert.equal((await collectionsRepo.listCollections()).some((collection) => collection.id === disposableCollectionA.id), false, "deleted collection is no longer listed");
+    setTestIdentity(userB);
+    assert.equal((await resourcesRepo.listSavedResources()).some((item) => item.saved.id === savedB.id), true, "deleting A's collection preserves B's saved source");
+    assert.equal((await collectionsRepo.getCollection(collectionB.id)).items.some((item) => item.resource.id === resource.id), true, "deleting A's collection preserves B's collection membership");
 
     // The canonical Resource is shared; all user-owned links remain scoped to the current profile.
     assert.equal((await resourcesRepo.getResource(resource.id)).id, resource.id);
