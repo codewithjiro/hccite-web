@@ -28,6 +28,9 @@ registerHooks({
     if (specifier === "server-only") return { url: "data:text/javascript,export%20{}", shortCircuit: true };
     if (specifier === "@clerk/nextjs/server") return { url: pathToFileURL(resolve(root, "tests/db-test-clerk.mjs")).href, shortCircuit: true };
     if (specifier === "next/navigation") return { url: pathToFileURL(resolve(root, "tests/db-test-navigation.mjs")).href, shortCircuit: true };
+    // Node's strip-types runner does not apply Next's extensionless subpath
+    // resolution, while route-handler integration tests import this module.
+    if (specifier === "next/server") return { url: pathToFileURL(resolve(root, "node_modules/next/server.js")).href, shortCircuit: true };
     let target = specifier.startsWith("~/") ? resolve(root, "src", specifier.slice(2)) : null;
     if (target) {
       if (!extname(target) && existsSync(`${target}.ts`)) target += ".ts";
