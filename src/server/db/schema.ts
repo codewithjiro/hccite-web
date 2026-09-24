@@ -199,14 +199,20 @@ export const rrlDrafts = createTable("rrl_draft", {
   contentHash: varchar("content_hash", { length: 128 }).notNull(),
   draftVersion: integer("draft_version").notNull().default(1),
   model: varchar("model", { length: 160 }),
+  modelVersion: varchar("model_version", { length: 160 }),
+  generationRequestId: uuid("generation_request_id"),
+  structuredContent: jsonb("structured_content").$type<Record<string, unknown> | null>(),
+  integrityContext: jsonb("integrity_context").$type<Array<Record<string, unknown>>>().notNull().default(sql`'[]'::jsonb`),
   generationVersion: integer("generation_version").notNull().default(1),
   ...timestamps(),
-}, (table) => [index("hccite_rrl_draft_study_updated_idx").on(table.studyId, table.updatedAt), check("hccite_rrl_draft_version_ck", sql`${table.draftVersion} > 0 and ${table.generationVersion} > 0`)]);
+}, (table) => [index("hccite_rrl_draft_study_updated_idx").on(table.studyId, table.updatedAt), uniqueIndex("hccite_rrl_draft_study_request_uq").on(table.studyId, table.generationRequestId).where(sql`${table.generationRequestId} is not null`), check("hccite_rrl_draft_version_ck", sql`${table.draftVersion} > 0 and ${table.generationVersion} > 0`)]);
 
 export const rrlDraftSources = createTable("rrl_draft_source", {
   draftId: uuid("draft_id").notNull().references(() => rrlDrafts.id, { onDelete: "cascade" }),
   resourceId: uuid("resource_id").notNull().references(() => resources.id, { onDelete: "cascade" }),
   selectedAtGeneration: boolean("selected_at_generation").notNull().default(true),
+  citationKey: varchar("citation_key", { length: 160 }).notNull(),
+  sourceSnapshot: jsonb("source_snapshot").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
   addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [primaryKey({ name: "hccite_rrl_draft_source_pk", columns: [table.draftId, table.resourceId] }), index("hccite_rrl_draft_source_resource_idx").on(table.resourceId)]);
 

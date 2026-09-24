@@ -36,6 +36,13 @@
       "when": 1790223414560,
       "tag": "0004_mixed_barracuda",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790242677059,
+      "tag": "0005_closed_salo",
+      "breakpoints": true
     }
   ]
 }

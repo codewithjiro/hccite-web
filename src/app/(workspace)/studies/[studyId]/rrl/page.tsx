@@ -1,6 +1,11 @@
-import { requireUserId } from "~/server/auth";
+import { notFound } from "next/navigation";
+import { RrlWorkspace } from "~/components/rrl-workspace";
+import { getOwnedStudyProfile } from "~/server/repositories/studies";
 
-export default async function Page() {
-  await requireUserId();
-  return <section className="mt-7 rounded-2xl border border-border bg-card p-6 sm:p-8"><p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Planned for phase 10</p><h2 className="mt-2 text-xl font-semibold">RRL draft</h2><p className="mt-3 leading-7 text-muted-foreground">Source-grounded review writing will appear here. This route contains no study data yet.</p></section>;
+export default async function Page({ params }: { params: Promise<{ studyId: string }> }) {
+  try {
+    const { studyId } = await params;
+    const { study } = await getOwnedStudyProfile(studyId);
+    return <RrlWorkspace studyId={study.id} studyTitle={study.title} />;
+  } catch { notFound(); }
 }

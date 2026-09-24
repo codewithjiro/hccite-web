@@ -21,6 +21,7 @@
     "test:analysis": "node --experimental-strip-types --import ./tests/discovery-test-loader.mjs --test tests/study-analysis.test.mjs && node --experimental-strip-types --import ./tests/db-test-loader.mjs --test tests/study-processing-db.test.mjs",
     "test:literature": "node --experimental-strip-types --import ./tests/discovery-test-loader.mjs --test tests/literature.test.mjs",
     "test:integrity": "node --experimental-strip-types --import ./tests/discovery-test-loader.mjs --test tests/integrity.test.mjs",
+    "test:rrl": "node --experimental-strip-types --import ./tests/discovery-test-loader.mjs --test tests/rrl.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
