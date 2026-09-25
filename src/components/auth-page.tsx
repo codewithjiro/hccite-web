@@ -26,9 +26,9 @@ export function AuthPage({ mode }: { mode: "sign-in" | "sign-up" }) {
         {clerkConfigured ? (
           <div className="flex justify-center">
             {mode === "sign-in" ? (
-              <SignIn fallback={<p role="status" className="p-6 text-muted-foreground">Loading sign-in…</p>} />
+              <SignIn forceRedirectUrl="/dashboard" fallbackRedirectUrl="/dashboard" fallback={<p role="status" className="p-6 text-muted-foreground">Loading sign-in…</p>} />
             ) : (
-              <SignUp fallback={<p role="status" className="p-6 text-muted-foreground">Loading sign-up…</p>} />
+              <SignUp forceRedirectUrl="/dashboard" fallbackRedirectUrl="/dashboard" fallback={<p role="status" className="p-6 text-muted-foreground">Loading sign-up…</p>} />
             )}
           </div>
         ) : (

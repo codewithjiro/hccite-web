@@ -4,6 +4,8 @@ import { ArrowRight, BookOpen, FileSearch, LibraryBig, ShieldCheck } from "lucid
 import { Brand } from "~/components/brand";
 import { ThemeControl } from "~/components/theme-control";
 import { LandingAuthLinks } from "~/components/landing-auth-links";
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 
 const plannedFeatures = [
   { title: "Discover sources", description: "Find scholarly articles and books, then inspect their bibliographic details.", icon: FileSearch },
@@ -12,7 +14,12 @@ const plannedFeatures = [
   { title: "Check the evidence", description: "Trace citations back to sources and review integrity before export.", icon: ShieldCheck },
 ];
 
-export default function HomePage() {
+export default async function HomePage() {
+  if (process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY) {
+    const { userId } = await auth();
+    if (userId) redirect("/dashboard");
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <a href="#main" className="skip-link">Skip to content</a>
