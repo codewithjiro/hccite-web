@@ -17,6 +17,7 @@ export function StudyUpload({ maxFileMb }: { maxFileMb: number }) {
     <div className="mx-auto mt-5 w-full max-w-2xl">
       <UploadDropzone
         endpoint="studyDocument"
+        config={{ mode: "auto" }}
         onBeforeUploadBegin={(files) => {
           setMessage(null);
           const rejected = files.find((file) => !/\.(pdf|docx)$/i.test(file.name) || file.size > maxBytes);
