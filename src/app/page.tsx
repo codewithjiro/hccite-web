@@ -21,6 +21,12 @@ const developers = [
   { name: "Nicole Manaloto", initials: "NM", tone: "from-amber-400/25 via-orange-500/15 to-rose-500/20" },
 ];
 
+const pageNavigation = [
+  { label: "About", href: "#about" },
+  { label: "Developers", href: "#developers" },
+  { label: "Contact", href: "#contact" },
+] as const;
+
 export default async function HomePage() {
   if (process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY) {
     const { userId } = await auth();
@@ -34,7 +40,7 @@ export default async function HomePage() {
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
           <Brand />
           <nav aria-label="Main navigation" className="order-3 flex w-full items-center justify-center gap-1 border-t border-border/70 pt-2 md:order-none md:ml-auto md:w-auto md:border-0 md:pt-0">
-            {[["About", "#about"], ["Developers", "#developers"], ["Contact", "#contact"]].map(([label, href]) => <Link key={href} href={href} className="inline-flex min-h-9 items-center rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">{label}</Link>)}
+            {pageNavigation.map(({ label, href }) => <Link key={href} href={href} className="inline-flex min-h-9 items-center rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">{label}</Link>)}
           </nav>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <ThemeControl />
