@@ -14,7 +14,7 @@ export function StudyUpload({ maxFileMb }: { maxFileMb: number }) {
       <p className="mt-2 text-muted-foreground">Clerk protects your HCCite study metadata and routes. UploadThing free-tier file URLs may be publicly accessible by URL; Clerk does not make the underlying UploadThing URL private.</p>
     </div>
     <p className="mt-4 text-sm text-muted-foreground">The server checks extension, MIME type, size, and actual PDF/DOCX structure before creating a Study record.</p>
-    <div className="mt-5">
+    <div className="mx-auto mt-5 w-full max-w-2xl">
       <UploadDropzone
         endpoint="studyDocument"
         onBeforeUploadBegin={(files) => {
@@ -25,7 +25,13 @@ export function StudyUpload({ maxFileMb }: { maxFileMb: number }) {
         }}
         onClientUploadComplete={() => { setMessage("Study uploaded and validated. It now appears in My Studies."); window.location.reload(); }}
         onUploadError={(error) => setMessage(error.message || "Upload failed. Please correct the file and retry.")}
-        appearance={{ container: "border-border bg-background ut-readying:bg-muted", button: "bg-primary text-primary-foreground hover:bg-primary/80" }}
+        appearance={{
+          container: "min-h-[210px] border-border bg-background px-5 py-6 sm:min-h-[230px] sm:px-7 sm:py-8 ut-readying:bg-muted",
+          uploadIcon: "h-14 w-14 sm:h-16 sm:w-16",
+          label: "text-sm font-semibold sm:text-base",
+          allowedContent: "text-xs sm:text-sm",
+          button: "bg-primary text-primary-foreground hover:bg-primary/80",
+        }}
         content={{ label: "Drop one PDF or DOCX here", allowedContent: `Maximum ${maxFileMb} MB` }}
       />
     </div>
