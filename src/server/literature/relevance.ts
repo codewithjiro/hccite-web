@@ -1,5 +1,6 @@
 import "server-only";
-import { env, requireServerEnv } from "~/env";
+import { env } from "~/env";
+import { requireServerEnv } from "~/server/env";
 import type { NormalizedResource } from "~/server/discovery/normalization";
 import { GeminiFailure } from "~/server/studies/gemini";
 import type { StudyProfile } from "~/server/studies/profile";

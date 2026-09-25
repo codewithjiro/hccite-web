@@ -67,6 +67,24 @@ test("processing failure retains source, retry succeeds once, and ready skips Ge
   }
 });
 
+test("invalid stored study files fail with a clear persisted validation error before Gemini runs", async () => {
+  setTestIdentity(owner);
+  const study = await repo.createStudy({ title: "Invalid signature", originalFileName: "synthetic.pdf", fileType: "pdf", fileUrl: "https://ufs.sh/f/invalid-signature", fileStorageKey: `${token}-invalid-signature` });
+  try {
+    const result = await processOwnedStudy(study.id, {
+      fetcher: async () => new Response(Buffer.from("not a PDF")),
+      analyze: async () => assert.fail("Gemini must not receive an invalid file"),
+    });
+    assert.equal(result.status, "failed");
+    assert.match(result.error, /did not pass validation/);
+    assert.doesNotMatch(result.error, /not a PDF|stack|Error:/i);
+    assert.match((await repo.getStudy(study.id)).processingError, /did not pass validation/);
+  } finally {
+    await getDb().delete(studies).where(eq(studies.id, study.id));
+    await closeDb();
+  }
+});
+
 test("PDF invalid whole-document output retries with semantic sections", async () => {
   setTestIdentity(owner);
   const study = await repo.createStudy({ title: "Fallback PDF", originalFileName: "fallback.pdf", fileType: "pdf", fileUrl: "https://ufs.sh/f/fallback", fileStorageKey: `${token}-fallback` });

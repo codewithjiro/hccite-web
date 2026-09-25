@@ -1,7 +1,7 @@
 import "server-only";
 
 export type ProviderName = "openalex" | "crossref" | "google_books";
-export type ProviderErrorCode = "invalid_input" | "missing_credentials" | "rate_limited" | "quota_exhausted" | "provider_outage" | "timeout" | "network_error" | "malformed_response" | "not_found" | "unknown";
+export type ProviderErrorCode = "invalid_input" | "missing_credentials" | "invalid_credentials" | "rate_limited" | "quota_exhausted" | "provider_outage" | "timeout" | "network_error" | "malformed_response" | "not_found" | "unknown";
 export class ProviderError extends Error {
   readonly provider: ProviderName;
   readonly code: ProviderErrorCode;
@@ -39,6 +39,9 @@ export async function providerJson<T>(provider: ProviderName, url: URL, headers?
     if (response.status >= 500 && attempt === 0) continue;
     if (!response.ok) {
       if (response.status === 404) throw new ProviderError(provider, "not_found", `${provider} did not find a matching record.`);
+      if (provider === "openalex" && (response.status === 401 || response.status === 403)) {
+        throw new ProviderError("openalex", "invalid_credentials", "OpenAlex rejected its API key. Check OPENALEX_API_KEY in the server environment.");
+      }
       if (provider === "google_books" && response.status === 403) {
         const body = await response.clone().text().catch(() => "");
         if (/quotaExceeded/i.test(body)) throw new ProviderError(provider, "quota_exhausted", "Google Books API quota is exhausted. Try again after the quota reset.");

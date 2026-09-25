@@ -3,7 +3,7 @@ import "server-only";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
-import { requireServerEnv } from "~/env";
+import { requireServerEnv } from "~/server/env";
 import * as schema from "./schema";
 
 /**

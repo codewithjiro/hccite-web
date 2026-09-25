@@ -38,6 +38,8 @@ INTEGRITY_CHECK_TTL_HOURS
 
 Server-only values are read only by server modules. Do not prefix database, provider, UploadThing, Gemini, or Clerk secret values with `NEXT_PUBLIC_`.
 
+For Vercel deployments, add `OPENALEX_API_KEY` and `GEMINI_API_KEY` under the project's **Settings → Environment Variables** for each environment that should use those providers (Development, Preview, and/or Production), then redeploy. The application reads those exact server-side names at request time; there is no separate `vercel.json` secret mapping.
+
 ## Database
 
 Create a dedicated HCCite database and set `DATABASE_URL`. Apply the checked-in migrations:

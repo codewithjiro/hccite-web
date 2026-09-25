@@ -13,6 +13,7 @@
     "lint": "eslint .",
     "preview": "next build && next start",
     "start": "next start",
+    "test": "pnpm test:auth && pnpm test:db && pnpm test:discovery && pnpm test:citation && pnpm test:studies && pnpm test:analysis && pnpm test:literature && pnpm test:integrity && pnpm test:rrl && pnpm test:rrl-audit && pnpm test:dashboard",
     "test:auth": "node --experimental-strip-types --test tests/auth-boundary.test.mjs",
     "test:db": "node --experimental-strip-types --import ./tests/db-test-loader.mjs --test tests/db-integration.test.mjs",
     "test:discovery": "node --experimental-strip-types --import ./tests/discovery-test-loader.mjs --test tests/discovery.test.mjs",

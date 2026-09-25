@@ -66,6 +66,35 @@ test("OpenAlex validates work responses and reports 429 without retry", async ()
   await assert.rejects(searchOpenAlex("x", 1, { apiKey: "fixture-only", fetcher: async () => new Response("{}", { status: 200 }) }), (error) => error.code === "malformed_response");
 });
 
+test("OpenAlex reads its server environment at request time and never returns the key", async () => {
+  const previous = process.env.OPENALEX_API_KEY;
+  process.env.OPENALEX_API_KEY = "fixture-server-key";
+  let requestedUrl;
+  try {
+    const result = await searchOpenAlex("a work", 1, { fetcher: async (input) => {
+      requestedUrl = new URL(input);
+      return new Response(JSON.stringify({ meta: { count: 1, per_page: 20 }, results: [{ id: "https://openalex.org/W123", display_name: "A work", authorships: [] }] }));
+    } });
+    assert.equal(requestedUrl.searchParams.get("api_key"), "fixture-server-key");
+    assert.equal(JSON.stringify(result).includes("fixture-server-key"), false);
+  } finally {
+    if (previous === undefined) delete process.env.OPENALEX_API_KEY;
+    else process.env.OPENALEX_API_KEY = previous;
+  }
+});
+
+test("OpenAlex reports absent and rejected credentials as typed configuration errors", async () => {
+  const previous = process.env.OPENALEX_API_KEY;
+  process.env.OPENALEX_API_KEY = "";
+  try {
+    await assert.rejects(searchOpenAlex("a work", 1, { fetcher: async () => assert.fail("must not call OpenAlex without a key") }), (error) => error.code === "missing_credentials");
+  } finally {
+    if (previous === undefined) delete process.env.OPENALEX_API_KEY;
+    else process.env.OPENALEX_API_KEY = previous;
+  }
+  await assert.rejects(searchOpenAlex("a work", 1, { apiKey: "fixture", fetcher: async () => new Response("", { status: 401 }) }), (error) => error.code === "invalid_credentials");
+});
+
 test("Crossref normalizes DOI lookup, keeps verification unknown, and handles not found and malformed responses", async () => {
   let requested = "";
   const work = { DOI: "10.5555/EXAMPLE", title: ["Example article"], author: [{ given: "Ada", family: "Lovelace" }], publisher: "Example Press", "container-title": ["Example Journal"], published: { "date-parts": [[2021, 4, 9]] }, URL: "https://publisher.example/item" };

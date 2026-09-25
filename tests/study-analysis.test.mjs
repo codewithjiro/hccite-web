@@ -50,14 +50,27 @@ test("Gemini validates output, retries 429 with Retry-After, and bounds failures
   assert.equal(retryDelay(1), 2000);
   await assert.rejects(analyzeWithGemini({ fileType: "docx", text: "demo" }, { fetcher: async () => Response.json({ output_text: "not json" }) }), (e) => e instanceof GeminiFailure && e.kind === "invalid");
   let repeated = 0;
-  await assert.rejects(analyzeWithGemini({ fileType: "docx", text: "demo" }, { fetcher: async () => { repeated++; return new Response("", { status: 429 }); }, delay: async () => {} }), (e) => e.kind === "quota");
+  await assert.rejects(analyzeWithGemini({ fileType: "docx", text: "demo" }, { fetcher: async () => { repeated++; return Response.json({ error: { status: "RESOURCE_EXHAUSTED", message: "quota exhausted" } }, { status: 429 }); }, delay: async () => {} }), (e) => e.kind === "quota");
   assert.equal(repeated, 3);
+  await assert.rejects(analyzeWithGemini({ fileType: "docx", text: "demo" }, { fetcher: async () => new Response("", { status: 429 }), maxAttempts: 1 }), (e) => e.kind === "rate_limit");
+  await assert.rejects(analyzeWithGemini({ fileType: "docx", text: "demo" }, { fetcher: async () => Response.json({ error: { status: "INVALID_ARGUMENT", message: "API key not valid", reason: "API_KEY_INVALID" } }, { status: 400 }) }), (e) => e.kind === "invalid_key");
   await assert.rejects(analyzeWithGemini({ fileType: "docx", text: "demo" }, { fetcher: async () => Response.json({ output_text: JSON.stringify({ ...profile, summary: "" }) }) }), (e) => e.kind === "invalid");
   let temporaryCalls = 0;
   assert.deepEqual(await analyzeWithGemini({ fileType: "docx", text: "demo" }, { fetcher: async () => ++temporaryCalls === 1 ? new Response("", { status: 503 }) : Response.json({ output_text: JSON.stringify(profile) }), delay: async () => {} }), profile);
   assert.equal(temporaryCalls, 2);
   await assert.rejects(analyzeWithGemini({ fileType: "docx", text: "demo" }, { fetcher: async () => { throw new Error("network"); } }), (e) => e.kind === "network");
   await assert.rejects(analyzeWithGemini({ fileType: "docx", text: "demo" }, { fetcher: async () => { throw new DOMException("timed out", "TimeoutError"); } }), (e) => e.kind === "timeout");
+});
+
+test("missing Gemini configuration is a typed server-only configuration failure", async () => {
+  const previous = process.env.GEMINI_API_KEY;
+  process.env.GEMINI_API_KEY = "";
+  try {
+    await assert.rejects(analyzeWithGemini({ fileType: "docx", text: "synthetic study" }), (error) => error instanceof GeminiFailure && error.kind === "missing_config");
+  } finally {
+    if (previous === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = previous;
+  }
 });
 
 test("PDF targeted fallback prompt uses semantic sections rather than fixed page chunks", async () => {

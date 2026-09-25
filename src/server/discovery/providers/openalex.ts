@@ -1,9 +1,9 @@
 import "server-only";
 
 import { z } from "zod";
-import { env } from "~/env";
 import { normalizeDoi, normalizedResourceSchema, safelyRenderUrl, type NormalizedResource } from "~/server/discovery/normalization";
 import { openAlexWorkIdSchema } from "~/server/discovery/locator";
+import { getServerEnv } from "~/server/env";
 import { ProviderError, providerJson } from "./shared";
 
 const openAlexWorkSchema = z.object({
@@ -41,8 +41,8 @@ function mapWork(work: z.infer<typeof openAlexWorkSchema>, retrievedAt: Date): N
 export async function getOpenAlexWorkById(input: string, options: { fetcher?: typeof fetch; apiKey?: string } = {}) {
   const parsedId = openAlexWorkIdSchema.safeParse(input);
   if (!parsedId.success) throw new ProviderError("openalex", "invalid_input", "Enter a valid OpenAlex work ID.");
-  const apiKey = options.apiKey ?? env.OPENALEX_API_KEY;
-  if (!apiKey) throw new ProviderError("openalex", "missing_credentials", "OpenAlex API key is not configured.");
+  const apiKey = options.apiKey !== undefined ? options.apiKey.trim() : getServerEnv("OPENALEX_API_KEY")?.trim();
+  if (!apiKey) throw new ProviderError("openalex", "missing_credentials", "OpenAlex API key is missing. Set OPENALEX_API_KEY in .env.local for development or in Vercel project settings for deployments.");
   const url = new URL(`https://api.openalex.org/works/${parsedId.data}`);
   url.searchParams.set("api_key", apiKey);
   const payload = await providerJson<unknown>("openalex", url, undefined, options.fetcher);
@@ -56,8 +56,8 @@ export async function getOpenAlexWorkById(input: string, options: { fetcher?: ty
 }
 
 export async function searchOpenAlex(query: string, page: number, options: { fetcher?: typeof fetch; apiKey?: string; yearFrom?: number; openAccess?: boolean } = {}) {
-  const apiKey = options.apiKey ?? env.OPENALEX_API_KEY;
-  if (!apiKey) throw new ProviderError("openalex", "missing_credentials", "OpenAlex API key is not configured.");
+  const apiKey = options.apiKey !== undefined ? options.apiKey.trim() : getServerEnv("OPENALEX_API_KEY")?.trim();
+  if (!apiKey) throw new ProviderError("openalex", "missing_credentials", "OpenAlex API key is missing. Set OPENALEX_API_KEY in .env.local for development or in Vercel project settings for deployments.");
   const url = new URL("https://api.openalex.org/works");
   url.searchParams.set("api_key", apiKey);
   url.searchParams.set("search", query);

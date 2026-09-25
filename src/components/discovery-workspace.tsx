@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Image from "next/image";
 import { AlertCircle, ArrowUpRight, BookOpen, LoaderCircle, Search, Save } from "lucide-react";
 import type { NormalizedResource } from "~/server/discovery/normalization";
@@ -42,6 +42,7 @@ export function DiscoveryWorkspace({ kind }: { kind: DiscoveryKind }) {
   const [status, setStatus] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
   const [library, setLibrary] = useState<{ saved: { saved: { id: string }; resource: { id: string; doi: string | null; isbn: string | null; source: string; sourceIdentifier: string | null; citationMetadata: Record<string, unknown> } }[]; collections: { id: string; name: string }[] } | null>(null);
+  const searchInFlight = useRef(false);
   const config = titles[kind];
 
   async function refreshLibrary() {
@@ -49,8 +50,15 @@ export function DiscoveryWorkspace({ kind }: { kind: DiscoveryKind }) {
   }
 
   async function runSearch(nextPage = 1, nextStartIndex = 0, append = false) {
+    if (searchInFlight.current) return;
     const q = query.trim();
-    if (!q) { setError({ provider: config.provider, code: "invalid_input", message: "Enter a search term to continue.", retryable: false }); return; }
+    if (!q) {
+      const validationError = { provider: config.provider, code: "invalid_input", message: "Enter a search term to continue.", retryable: false };
+      setError(validationError);
+      toast.error(validationError.message);
+      return;
+    }
+    searchInFlight.current = true;
     setLoading(true); setError(null); setStatus(""); setHasSearched(true); setPage(nextPage); setStartIndex(nextStartIndex);
     try {
       let url: string;
@@ -73,15 +81,18 @@ export function DiscoveryWorkspace({ kind }: { kind: DiscoveryKind }) {
       setTotal(payload.total ?? found.length);
       setHasMore(payload.hasMore ?? false);
       setPage(nextPage); setStartIndex(nextStartIndex);
+      if (found.length && !append && nextPage === 1) toast.success(`Found ${found.length} ${found.length === 1 ? "record" : "records"}.`);
       if (payload.doiFound) setStatus("Crossref metadata found. Save or associate this canonical source to check Source Health; a DOI string alone is not verification.");
       if (!found.length) setStatus("No matching records were returned.");
     } catch (caught) {
-      const providerError = caught && typeof caught === "object" && "message" in caught
-        ? caught as ProviderError : { provider: config.provider, code: "network_error", message: `${config.provider} could not be reached. Check your connection and retry.`, retryable: true };
+      const candidate = caught && typeof caught === "object" ? caught as Partial<ProviderError> : null;
+      const providerError: ProviderError = candidate && typeof candidate.code === "string" && typeof candidate.message === "string"
+        ? { provider: candidate.provider ?? config.provider, code: candidate.code, message: candidate.message, retryable: candidate.retryable === true }
+        : { provider: config.provider, code: "network_error", message: `${config.provider} could not be reached. Check your connection and retry.`, retryable: true };
       setError(providerError);
       toast.error(providerError.message);
       if (!append) setResults([]);
-    } finally { setLoading(false); }
+    } finally { searchInFlight.current = false; setLoading(false); }
   }
 
   async function save(resource: NormalizedResource) {
@@ -160,7 +171,7 @@ export function DiscoveryWorkspace({ kind }: { kind: DiscoveryKind }) {
 
       {loading && <div role="status" className="flex items-center gap-3 rounded-2xl border border-border bg-card p-6 text-sm"><LoaderCircle className="size-5 animate-spin text-primary" /> Searching {config.provider}…</div>}
       {error && <div role="alert" className="rounded-2xl border border-destructive/40 bg-destructive/5 p-5">
-        <div className="flex gap-3"><AlertCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-destructive" /><div className="min-w-0"><h2 className="font-semibold">{error.code === "invalid_input" ? "Check your search" : error.code === "missing_credentials" ? "Provider setup required" : error.code === "quota_exhausted" || error.code === "rate_limited" ? "Provider rate limit reached" : error.code === "not_found" ? "No DOI record found" : error.code === "provider_outage" || error.code === "timeout" || error.code === "network_error" ? "Provider unavailable" : error.code === "malformed_response" ? "Provider response could not be read" : "Search failed"}</h2><p className="mt-1 break-words text-sm text-muted-foreground">{error.message}</p>
+        <div className="flex gap-3"><AlertCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-destructive" /><div className="min-w-0"><h2 className="font-semibold">{error.code === "invalid_input" ? "Check your search" : error.code === "missing_credentials" || error.code === "invalid_credentials" ? "Provider setup required" : error.code === "quota_exhausted" || error.code === "rate_limited" ? "Provider rate limit reached" : error.code === "not_found" ? "No DOI record found" : error.code === "provider_outage" || error.code === "timeout" || error.code === "network_error" ? "Provider unavailable" : error.code === "malformed_response" ? "Provider response could not be read" : "Search failed"}</h2><p className="mt-1 break-words text-sm text-muted-foreground">{error.message}</p>
           {error.retryable && <button type="button" onClick={() => void runSearch(page, startIndex)} className="mt-3 min-h-10 rounded-xl border border-border px-4 text-sm font-semibold hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">Retry</button>}
         </div></div>
       </div>}

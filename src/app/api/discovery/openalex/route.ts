@@ -15,6 +15,6 @@ export async function GET(request: Request) {
     return NextResponse.json(result);
   } catch (error) {
     const body = getErrorResponse(error);
-    return NextResponse.json(body, { status: error instanceof ProviderError ? (error.code === "missing_credentials" ? 503 : error.code === "invalid_input" ? 400 : error.code === "not_found" ? 404 : 502) : 500 });
+    return NextResponse.json(body, { status: error instanceof ProviderError ? (error.code === "missing_credentials" || error.code === "invalid_credentials" ? 503 : error.code === "invalid_input" ? 400 : error.code === "not_found" ? 404 : 502) : 500 });
   }
 }

@@ -1,8 +1,7 @@
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 
-// Integrations are optional until their implementation phases. Call
-// requireServerEnv from the feature that needs a particular credential.
+// Provider integrations stay optional at startup; server-only features require credentials when called.
 export const env = createEnv({
   server: {
     DATABASE_URL: z.string().url().optional(),
@@ -46,11 +45,3 @@ export const env = createEnv({
   },
   emptyStringAsUndefined: true,
 });
-
-export function requireServerEnv<K extends keyof typeof env>(key: K): NonNullable<(typeof env)[K]> {
-  const value = env[key];
-  if (value === undefined || value === "") {
-    throw new Error(`${key} is required for this feature. Add it to your local .env file.`);
-  }
-  return value as NonNullable<(typeof env)[K]>;
-}

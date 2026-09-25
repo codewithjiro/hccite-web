@@ -1,6 +1,7 @@
 import "server-only";
 
-import { env, requireServerEnv } from "~/env";
+import { env } from "~/env";
+import { requireServerEnv } from "~/server/env";
 import { GeminiFailure, retryDelay } from "~/server/studies/gemini";
 import { parseRrlDocument, type RrlDocument } from "./core";
 
@@ -67,5 +68,5 @@ export async function generateRrlWithGemini(input: RrlGeminiInput, options: { fe
 
 export function safeRrlGeminiError(error: unknown) {
   if (!(error instanceof GeminiFailure)) return "RRL generation failed. Please retry.";
-  return ({ quota: "Gemini is rate-limited. HCCite retried safely; please try again later.", config: "Gemini is not configured for RRL generation.", model: "The configured Gemini model is unavailable.", invalid: "Gemini returned an invalid or unmapped RRL. Nothing was saved; please retry.", timeout: "Gemini timed out. Nothing was saved; please retry.", temporary: "Gemini is temporarily unavailable. Nothing was saved; please retry.", document: "RRL generation could not be completed. Please retry.", network: "Could not reach Gemini. Nothing was saved; please retry." })[error.kind];
+  return ({ missing_config: "Gemini is not configured for RRL generation.", invalid_key: "Gemini rejected its API key. Check GEMINI_API_KEY in the server environment.", rate_limit: "Gemini is rate-limiting requests. Please try again later.", quota: "Gemini is rate-limited. HCCite retried safely; please try again later.", config: "Gemini is not configured for RRL generation.", model: "The configured Gemini model is unavailable.", invalid: "Gemini returned an invalid or unmapped RRL. Nothing was saved; please retry.", timeout: "Gemini timed out. Nothing was saved; please retry.", temporary: "Gemini is temporarily unavailable. Nothing was saved; please retry.", document: "RRL generation could not be completed. Please retry.", network: "Could not reach Gemini. Nothing was saved; please retry." })[error.kind];
 }

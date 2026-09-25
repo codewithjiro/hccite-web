@@ -20,7 +20,14 @@ export async function deleteStudyAction(studyId: string) {
 
 export async function processStudyAction(studyId: string) {
   const id = z.string().uuid().safeParse(studyId);
-  if (!id.success) return { status: "failed" as const, error: "The study identifier is invalid." };
+  if (!id.success) return { status: "failed" as const, error: "The study identifier is invalid.", persisted: false };
   try { return await processOwnedStudy(id.data); }
-  catch { return { status: "failed" as const, error: "Study processing could not start." }; }
+  catch (error) {
+    console.error("[study-processing] could not start", {
+      studyId: id.data,
+      stage: "claim",
+      code: error instanceof Error ? error.name : "unexpected_server_error",
+    });
+    return { status: "failed" as const, error: "Analysis could not start. Refresh the page and retry.", persisted: false };
+  }
 }
