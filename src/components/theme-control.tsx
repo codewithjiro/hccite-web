@@ -5,24 +5,26 @@ import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 
 export function ThemeControl() {
-  const { theme, resolvedTheme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
+  const isDark = mounted && resolvedTheme === "dark";
+  const label = isDark ? "Switch to light mode" : "Switch to dark mode";
+
   return (
-    <label className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm text-foreground shadow-sm focus-within:ring-2 focus-within:ring-ring">
-      {mounted && resolvedTheme === "dark" ? <Moon aria-hidden="true" className="size-4" /> : <Sun aria-hidden="true" className="size-4" />}
-      <span className="sr-only sm:not-sr-only">Theme</span>
-      <select
-        aria-label="Theme"
-        className="min-h-10 bg-transparent outline-none"
-        value={mounted ? theme : "system"}
-        onChange={(event) => setTheme(event.target.value)}
-      >
-        <option value="system">System</option>
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
-      </select>
-    </label>
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={() => setTheme(isDark ? "light" : "dark")}
+      className="inline-flex size-11 shrink-0 items-center justify-center rounded-xl border border-border bg-card text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+    >
+      {isDark ? (
+        <Sun aria-hidden="true" className="size-5" />
+      ) : (
+        <Moon aria-hidden="true" className="size-5" />
+      )}
+    </button>
   );
 }
