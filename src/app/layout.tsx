@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { ThemeProvider } from "~/components/theme-provider";
 import { env } from "~/env";
+import { Toaster } from "~/components/ui/sonner";
 
 export const metadata: Metadata = {
   title: {
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               {children}
             </ClerkProvider>
           ) : children}
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>

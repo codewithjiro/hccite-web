@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { CitationPanel } from "~/components/citation-panel";
+import { toast } from "sonner";
 
 type Resource = { id: string; title: string; type: string; authors: string[]; year: number | null; venue: string | null; publisher: string | null; doi: string | null; isbn: string | null; source: string; url: string | null };
 type Saved = { id: string; resourceId: string; readingStatus: "unread" | "reading" | "read"; notes: string | null };
@@ -21,14 +22,22 @@ export function LibraryWorkspace() {
     catch { setError("Your library could not be loaded. Retry shortly."); }
   }, []);
   useEffect(() => { void refresh(); }, [refresh]);
-  async function act(payload: Record<string, unknown>) {
+  async function act(payload: Record<string, unknown>): Promise<boolean> {
     setBusy(true); setError("");
     try {
       const response = await fetch("/api/library", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const body = await response.json() as { error?: string };
       if (!response.ok) throw new Error(body.error ?? "The change could not be saved.");
       await refresh();
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "The change could not be saved."); }
+      const success: Record<string, string> = {
+        unsave: "Resource removed successfully.", updateSaved: "Changes saved successfully.", createCollection: "Collection created successfully.",
+        renameCollection: "Collection updated successfully.", deleteCollection: "Collection deleted successfully.", addCollection: "Resource added to collection.",
+        removeCollection: "Resource removed from collection.", createTag: "Tag created successfully.", deleteTag: "Tag deleted successfully.",
+        attachTag: "Tag added successfully.", removeTag: "Tag removed successfully.",
+      };
+      toast.success(success[String(payload.action)] ?? "Changes saved successfully.");
+      return true;
+    } catch (caught) { toast.error(caught instanceof Error ? caught.message : "The change could not be saved."); return false; }
     finally { setBusy(false); }
   }
   return <section className="mx-auto max-w-5xl space-y-6">
@@ -37,8 +46,8 @@ export function LibraryWorkspace() {
     {!data && !error && <p role="status">Loading your library…</p>}
     {data && <>
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-2xl border border-border bg-card p-4"><h2 className="font-semibold">Collections</h2><form className="mt-3 flex gap-2" onSubmit={(e) => { e.preventDefault(); void act({ action: "createCollection", name: collectionName }).then(() => setCollectionName("")); }}><input aria-label="New collection name" maxLength={160} required value={collectionName} onChange={(e) => setCollectionName(e.target.value)} className="min-w-0 flex-1 rounded-lg border border-input bg-background px-3"/><button disabled={busy} className="min-h-10 rounded-lg bg-primary px-3 text-sm text-primary-foreground">Create</button></form><div className="mt-3 flex flex-wrap gap-2"><button onClick={() => setSelectedCollection(null)} className="rounded-lg border border-border px-3 py-2 text-sm">All sources</button>{data.collections.map((c) => <button key={c.id} onClick={() => setSelectedCollection(c.id)} className={`rounded-lg border px-3 py-2 text-sm ${selectedCollection === c.id ? "border-primary" : "border-border"}`}>{c.name}</button>)}</div>{selectedCollection && <div className="mt-3 flex flex-wrap gap-2"><button disabled={busy} onClick={() => { const name = prompt("Rename collection", data.collections.find((c) => c.id === selectedCollection)?.name); if (name?.trim()) void act({ action: "renameCollection", collectionId: selectedCollection, name }); }} className="text-sm underline">Rename</button><button disabled={busy} onClick={() => { if (confirm("Delete this collection? Sources will stay saved.")) void act({ action: "deleteCollection", collectionId: selectedCollection }).then(() => setSelectedCollection(null)); }} className="text-sm text-destructive underline">Delete collection</button></div>}</div>
-        <div className="rounded-2xl border border-border bg-card p-4"><h2 className="font-semibold">Your tags</h2><form className="mt-3 flex gap-2" onSubmit={(e) => { e.preventDefault(); void act({ action: "createTag", name: tagName }).then(() => setTagName("")); }}><input aria-label="New tag name" maxLength={80} required value={tagName} onChange={(e) => setTagName(e.target.value)} className="min-w-0 flex-1 rounded-lg border border-input bg-background px-3"/><button disabled={busy} className="min-h-10 rounded-lg bg-primary px-3 text-sm text-primary-foreground">Create</button></form><div className="mt-3 flex flex-wrap gap-2">{data.tags.map((tag) => <span key={tag.id} className="rounded-lg border border-border px-2 py-1 text-sm">{tag.name} <button disabled={busy} aria-label={`Delete tag ${tag.name}`} onClick={() => void act({ action: "deleteTag", tagId: tag.id })} className="ml-1 text-destructive">×</button></span>)}</div></div>
+        <div className="rounded-2xl border border-border bg-card p-4"><h2 className="font-semibold">Collections</h2><form className="mt-3 flex gap-2" onSubmit={(e) => { e.preventDefault(); void act({ action: "createCollection", name: collectionName }).then((saved) => { if (saved) setCollectionName(""); }); }}><input aria-label="New collection name" maxLength={160} required value={collectionName} onChange={(e) => setCollectionName(e.target.value)} className="min-w-0 flex-1 rounded-lg border border-input bg-background px-3"/><button disabled={busy} className="min-h-10 rounded-lg bg-primary px-3 text-sm text-primary-foreground">Create</button></form><div className="mt-3 flex flex-wrap gap-2"><button onClick={() => setSelectedCollection(null)} className="rounded-lg border border-border px-3 py-2 text-sm">All sources</button>{data.collections.map((c) => <button key={c.id} onClick={() => setSelectedCollection(c.id)} className={`rounded-lg border px-3 py-2 text-sm ${selectedCollection === c.id ? "border-primary" : "border-border"}`}>{c.name}</button>)}</div>{selectedCollection && <div className="mt-3 flex flex-wrap gap-2"><button disabled={busy} onClick={() => { const name = prompt("Rename collection", data.collections.find((c) => c.id === selectedCollection)?.name); if (name?.trim()) void act({ action: "renameCollection", collectionId: selectedCollection, name }); }} className="text-sm underline">Rename</button><button disabled={busy} onClick={() => { if (confirm("Delete this collection? Sources will stay saved.")) void act({ action: "deleteCollection", collectionId: selectedCollection }).then(() => setSelectedCollection(null)); }} className="text-sm text-destructive underline">Delete collection</button></div>}</div>
+        <div className="rounded-2xl border border-border bg-card p-4"><h2 className="font-semibold">Your tags</h2><form className="mt-3 flex gap-2" onSubmit={(e) => { e.preventDefault(); void act({ action: "createTag", name: tagName }).then((saved) => { if (saved) setTagName(""); }); }}><input aria-label="New tag name" maxLength={80} required value={tagName} onChange={(e) => setTagName(e.target.value)} className="min-w-0 flex-1 rounded-lg border border-input bg-background px-3"/><button disabled={busy} className="min-h-10 rounded-lg bg-primary px-3 text-sm text-primary-foreground">Create</button></form><div className="mt-3 flex flex-wrap gap-2">{data.tags.map((tag) => <span key={tag.id} className="rounded-lg border border-border px-2 py-1 text-sm">{tag.name} <button disabled={busy} aria-label={`Delete tag ${tag.name}`} onClick={() => void act({ action: "deleteTag", tagId: tag.id })} className="ml-1 text-destructive">×</button></span>)}</div></div>
       </div>
       <h2 className="text-xl font-semibold">{selectedCollection ? data.collections.find((c) => c.id === selectedCollection)?.name ?? "Collection" : "All saved sources"}</h2>
       {data.saved.filter(({ resource }) => !selectedCollection || data.collectionLinks.some((l) => l.collectionId === selectedCollection && l.resourceId === resource.id)).length === 0 && <p className="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">No sources here yet. Discover an article or book and save it to your library.</p>}
@@ -47,7 +56,7 @@ export function LibraryWorkspace() {
   </section>;
 }
 
-function SavedCard({ saved, resource, data, act, busy }: { saved: Saved; resource: Resource; data: LibraryData; act: (payload: Record<string, unknown>) => Promise<void>; busy: boolean }) {
+function SavedCard({ saved, resource, data, act, busy }: { saved: Saved; resource: Resource; data: LibraryData; act: (payload: Record<string, unknown>) => Promise<boolean>; busy: boolean }) {
   const [notes, setNotes] = useState(saved.notes ?? "");
   useEffect(() => setNotes(saved.notes ?? ""), [saved.notes]);
   return <article className="rounded-2xl border border-border bg-card p-5 space-y-4">

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import { UploadDropzone } from "~/lib/uploadthing";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 export function StudyUpload({ maxFileMb }: { maxFileMb: number }) {
-  const [message, setMessage] = useState<string | null>(null);
+  const router = useRouter();
   const maxBytes = Math.floor(maxFileMb * 1024 * 1024);
   return <section className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-7">
     <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Upload a study</p>
@@ -19,13 +20,12 @@ export function StudyUpload({ maxFileMb }: { maxFileMb: number }) {
         endpoint="studyDocument"
         config={{ mode: "auto" }}
         onBeforeUploadBegin={(files) => {
-          setMessage(null);
           const rejected = files.find((file) => !/\.(pdf|docx)$/i.test(file.name) || file.size > maxBytes);
-          if (rejected) { setMessage(`Choose one PDF or DOCX no larger than ${maxFileMb} MB.`); return []; }
+          if (rejected) { toast.error(`Choose one PDF or DOCX no larger than ${maxFileMb} MB.`); return []; }
           return files.slice(0, 1);
         }}
-        onClientUploadComplete={() => { setMessage("Study uploaded and validated. It now appears in My Studies."); window.location.reload(); }}
-        onUploadError={(error) => setMessage(error.message || "Upload failed. Please correct the file and retry.")}
+        onClientUploadComplete={() => { toast.success("Study uploaded successfully."); router.refresh(); }}
+        onUploadError={() => { toast.error("Failed to upload study. Please try again."); }}
         appearance={{
           container: "min-h-[210px] border-border bg-background px-5 py-6 sm:min-h-[230px] sm:px-7 sm:py-8 ut-readying:bg-muted",
           uploadIcon: "h-14 w-14 sm:h-16 sm:w-16",
@@ -36,6 +36,5 @@ export function StudyUpload({ maxFileMb }: { maxFileMb: number }) {
         content={{ label: "Drop one PDF or DOCX here", allowedContent: `Maximum ${maxFileMb} MB` }}
       />
     </div>
-    {message && <p role="status" className="mt-4 rounded-lg bg-muted px-3 py-2 text-sm text-foreground">{message}</p>}
   </section>;
 }
