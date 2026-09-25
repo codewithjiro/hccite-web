@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, BookOpen, FileSearch, GraduationCap, Info, LibraryBig, MapPin, ShieldCheck, UserRoundPlus } from "lucide-react";
+import { ArrowRight, ArrowUpRight, BookOpen, FileSearch, GraduationCap, Image as ImageIcon, Info, LibraryBig, Mail, MapPin, ShieldCheck, UserRound, UserRoundPlus } from "lucide-react";
 import { Brand } from "~/components/brand";
 import { ThemeControl } from "~/components/theme-control";
 import { LandingAuthLinks } from "~/components/landing-auth-links";
@@ -12,6 +12,13 @@ const plannedFeatures = [
   { title: "Keep your library", description: "Collect useful references, organize them, and prepare citations.", icon: LibraryBig },
   { title: "Work from your study", description: "Analyze a study and use selected literature to support an editable review.", icon: BookOpen },
   { title: "Check the evidence", description: "Trace citations back to sources and review integrity before export.", icon: ShieldCheck },
+];
+
+const developers = [
+  { name: "Jenah Ambagan", initials: "JA", tone: "from-sky-400/25 via-blue-500/15 to-indigo-500/20" },
+  { name: "Venice Bumagat", initials: "VB", tone: "from-violet-400/25 via-fuchsia-500/15 to-pink-500/20" },
+  { name: "Jiro Gonzales", initials: "JG", tone: "from-cyan-400/25 via-teal-500/15 to-emerald-500/20" },
+  { name: "Nicole Manaloto", initials: "NM", tone: "from-amber-400/25 via-orange-500/15 to-rose-500/20" },
 ];
 
 export default async function HomePage() {
@@ -26,6 +33,9 @@ export default async function HomePage() {
       <header className="sticky top-0 z-30 border-b border-border/80 bg-card/85 shadow-sm shadow-slate-950/[0.03] backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
           <Brand />
+          <nav aria-label="Main navigation" className="order-3 flex w-full items-center justify-center gap-1 border-t border-border/70 pt-2 md:order-none md:ml-auto md:w-auto md:border-0 md:pt-0">
+            {[["About", "#about"], ["Developers", "#developers"], ["Contact", "#contact"]].map(([label, href]) => <Link key={href} href={href} className="inline-flex min-h-9 items-center rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">{label}</Link>)}
+          </nav>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <ThemeControl />
             <LandingAuthLinks />
@@ -84,9 +94,87 @@ export default async function HomePage() {
             </div>
           </div>
         </section>
+
+        <section id="about" aria-labelledby="about-heading" className="scroll-mt-24 px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
+          <div className="mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-16">
+            <div>
+              <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-primary"><span className="h-px w-6 bg-primary" />About HCCite</p>
+              <h2 id="about-heading" className="mt-4 max-w-xl text-3xl font-bold leading-tight tracking-tight sm:text-4xl">Research is stronger when every source has a clear path.</h2>
+              <p className="mt-5 max-w-xl text-base leading-7 text-muted-foreground">HCCite is being developed as a research workspace for Holy Cross College. Its goal is to bring source discovery, reference organization, citation tools, and study analysis together while keeping research connected to its sources.</p>
+            </div>
+            <div className="relative overflow-hidden rounded-3xl border border-border/80 bg-card p-6 shadow-lg shadow-slate-950/[0.04] sm:p-8">
+              <div aria-hidden="true" className="absolute -right-16 -top-20 size-56 rounded-full bg-primary/10 blur-3xl" />
+              <div className="relative">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">A thoughtful research process</p>
+                <ul className="mt-6 space-y-5">
+                  <li className="flex gap-4"><span className="inline-flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><FileSearch aria-hidden="true" className="size-5" /></span><span><span className="block font-semibold">Find relevant sources</span><span className="mt-1 block text-sm leading-6 text-muted-foreground">Discover scholarly articles and books for your work.</span></span></li>
+                  <li className="flex gap-4"><span className="inline-flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><LibraryBig aria-hidden="true" className="size-5" /></span><span><span className="block font-semibold">Keep references organized</span><span className="mt-1 block text-sm leading-6 text-muted-foreground">Collect useful sources and prepare citations in one place.</span></span></li>
+                  <li className="flex gap-4"><span className="inline-flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><ShieldCheck aria-hidden="true" className="size-5" /></span><span><span className="block font-semibold">Stay close to the evidence</span><span className="mt-1 block text-sm leading-6 text-muted-foreground">Keep a clear trail from research writing back to real sources.</span></span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="developers" aria-labelledby="developers-heading" className="scroll-mt-24 border-y border-border/70 bg-muted/20 px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
+          <div className="mx-auto max-w-7xl">
+            <div className="mx-auto max-w-2xl text-center">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">The people behind HCCite</p>
+              <h2 id="developers-heading" className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Meet the developers</h2>
+              <p className="mt-4 text-base leading-7 text-muted-foreground">The team behind the project, building a research workspace for the Holy Cross College community. Portraits are placeholders for now.</p>
+            </div>
+            <div className="mt-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+              {developers.map((developer) => (
+                <article key={developer.name} className="group overflow-hidden rounded-3xl border border-border/80 bg-card shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-xl hover:shadow-primary/5">
+                  <div role="img" aria-label={`Photo placeholder for ${developer.name}`} className={`relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-gradient-to-br ${developer.tone}`}>
+                    <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.5),transparent_38%)] dark:bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.12),transparent_38%)]" />
+                    <div className="relative flex size-28 items-center justify-center rounded-full border border-white/50 bg-white/35 text-primary shadow-lg shadow-slate-950/10 backdrop-blur-sm transition-transform duration-300 group-hover:scale-105 dark:border-white/15 dark:bg-slate-950/20">
+                      <UserRound aria-hidden="true" className="size-14 stroke-[1.25]" />
+                      <span className="absolute -bottom-1 -right-1 inline-flex size-9 items-center justify-center rounded-full border-2 border-card bg-primary text-[10px] font-bold tracking-wide text-primary-foreground">{developer.initials}</span>
+                    </div>
+                    <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full border border-white/30 bg-slate-950/35 px-3 py-1.5 text-[11px] font-medium text-white backdrop-blur"><ImageIcon aria-hidden="true" className="size-3.5" />Photo placeholder</span>
+                  </div>
+                  <div className="p-5">
+                    <h3 className="text-lg font-semibold tracking-tight">{developer.name}</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">Developer</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="contact" aria-labelledby="contact-heading" className="scroll-mt-24 px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
+          <div className="mx-auto max-w-7xl">
+            <div className="relative overflow-hidden rounded-[2rem] border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-cyan-500/10 p-7 shadow-lg shadow-primary/5 sm:p-10 lg:p-14">
+              <div aria-hidden="true" className="absolute -right-24 -top-28 size-80 rounded-full bg-primary/10 blur-3xl" />
+              <div className="relative grid items-center gap-8 md:grid-cols-[minmax(0,1fr)_minmax(16rem,0.62fr)] md:gap-12">
+                <div>
+                  <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-primary"><Mail aria-hidden="true" className="size-4" />Contact</p>
+                  <h2 id="contact-heading" className="mt-4 max-w-2xl text-3xl font-bold tracking-tight sm:text-4xl">Have a question or an idea?</h2>
+                  <p className="mt-4 max-w-xl text-base leading-7 text-muted-foreground">Have a question, suggestion, or feedback? Send the HCCite team a message—we’d love to hear from you.</p>
+                </div>
+                <Link href="mailto:hccite@hcc.edu" className="group flex items-center gap-4 rounded-2xl border border-border/80 bg-card/80 p-5 shadow-sm backdrop-blur transition-all hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-lg sm:p-6">
+                  <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Mail aria-hidden="true" className="size-5" /></span>
+                  <span className="min-w-0 flex-1"><span className="block text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">Email the team</span><span className="mt-1 block break-all font-semibold text-foreground">hccite@hcc.edu</span></span>
+                  <ArrowUpRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary" />
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
       </main>
 
-      <footer className="border-t border-border px-4 py-7 text-center text-sm text-muted-foreground sm:px-6">HCCite · Holy Cross College research workspace</footer>
+      <footer className="border-t border-border bg-card/60 px-4 py-7 sm:px-6">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 text-sm text-muted-foreground sm:flex-row">
+          <p>HCCite · Holy Cross College research workspace</p>
+          <nav aria-label="Footer navigation" className="flex flex-wrap items-center justify-center gap-4">
+            <Link href="#about" className="transition-colors hover:text-foreground">About</Link>
+            <Link href="#developers" className="transition-colors hover:text-foreground">Developers</Link>
+            <Link href="#contact" className="transition-colors hover:text-foreground">Contact</Link>
+          </nav>
+        </div>
+      </footer>
     </div>
   );
 }
