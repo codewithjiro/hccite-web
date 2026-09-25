@@ -1,41 +1,130 @@
-# HCCite local setup — Phase 03
+# HCCite local setup
 
-The product specification is `README.md`. The current implementation includes the Phase 01 interface, Phase 02 Clerk authentication, and Phase 03 PostgreSQL/Drizzle persistence contracts. Search, study processing, AI, citation generation, and dashboard behavior remain later phases.
+The product contract is [README.md](README.md). This guide describes the final Phase 12 school-project build.
 
-## Run
+## Requirements
 
-1. Install Node.js 20 or newer and pnpm, then run `pnpm install`.
-2. Create a free Clerk application in the [Clerk Dashboard](https://dashboard.clerk.com/). Enable email sign-up and sign-in in its settings. Copy `.env.example` to `.env.local` and set `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` from the same Clerk instance. Leave the Clerk route and fallback URL values as shown. Set these before starting development or building for production.
-3. Run `pnpm dev` and open `http://localhost:3000`.
+- Node.js 20 or newer (the final verification used Node.js 24)
+- pnpm 11.x (the repository pins `pnpm@11.19.0`)
+- PostgreSQL 14 or newer, or a compatible hosted PostgreSQL database such as Neon
+- Free/Hobby projects for Clerk, UploadThing, OpenAlex, Google Books, and Gemini
+- A contact email for Crossref polite-pool requests
+- Vercel only if deploying; it is not required for local development
 
-## PostgreSQL and Drizzle
+Use free-tier accounts only. UploadThing free-plan files are URL-accessible, and Gemini Free Tier content may be used by Google to improve its products. HCCite must therefore be used only with public, synthetic, sample, or otherwise non-confidential documents.
 
-Phase 03 needs PostgreSQL 14 or newer. Install/run PostgreSQL locally or use a PostgreSQL service, create a dedicated empty database named `hccite`, then set `DATABASE_URL` in `.env.local` using the connection string for that database. Keep the value private and never commit `.env.local`. When running Drizzle CLI commands, make sure `DATABASE_URL` is also present in the shell process environment (for PowerShell, set `$env:DATABASE_URL` first); Next.js loads `.env.local` for the app, but Drizzle Kit runs as a separate CLI process.
+## Environment variables
 
-Run `pnpm db:generate` to generate a migration from the checked-in schema; schema generation does not need a running database. Run `pnpm db:migrate` to apply checked-in migrations to the database named by `DATABASE_URL`. `pnpm db:push` is available for disposable local schema experiments, but migrations are the reproducible setup path. `pnpm db:studio` opens Drizzle Studio against the configured database.
+Copy `.env.example` to `.env.local` and configure these names. Never commit real values.
 
-The migrations create the `hccite_*` tables, enum types, indexes, constraints, and foreign keys in PostgreSQL's `public` schema. There are no seed records: the app does not fabricate bibliographic or academic data. `pnpm test:db` runs the focused Phase 03 repository and constraint integration suite against the configured `DATABASE_URL` (or the local Vercel environment file); it uses clearly labelled synthetic fixtures and cleans them up afterward. Use a database you control for this command.
+```text
+NEXT_PUBLIC_APP_URL
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+CLERK_SECRET_KEY
+NEXT_PUBLIC_CLERK_SIGN_IN_URL
+NEXT_PUBLIC_CLERK_SIGN_UP_URL
+NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL
+NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL
+DATABASE_URL
+OPENALEX_API_KEY
+CROSSREF_MAILTO
+GOOGLE_BOOKS_API_KEY
+UPLOADTHING_TOKEN
+MAX_STUDY_FILE_MB
+GEMINI_API_KEY
+GEMINI_MODEL
+INTEGRITY_CHECK_TTL_HOURS
+```
 
-To rebuild a disposable local database from scratch, stop the app, drop and recreate only the dedicated `hccite` database using your local PostgreSQL tools, then run `pnpm db:migrate`. PostgreSQL has no automatic down migration generated here; preserve any data you need before rebuilding. Do not run reset/drop commands against a shared or production database. Drizzle's generated SQL and journal are kept under `drizzle/`; applied migration state is recorded in the database.
+Server-only values are read only by server modules. Do not prefix database, provider, UploadThing, Gemini, or Clerk secret values with `NEXT_PUBLIC_`.
 
-If PostgreSQL is not running or `DATABASE_URL` is not configured, migrations and live repository checks remain pending. The application still builds because database connections are opened only when a repository is used.
+## Database
 
-Keep `.env.local` and all secrets untracked. If either Clerk key is missing, the public landing and auth setup message remain accessible; every workspace and account route stays closed.
+Create a dedicated HCCite database and set `DATABASE_URL`. Apply the checked-in migrations:
 
-## Authentication routes
+```powershell
+pnpm install
+$env:DATABASE_URL = "<your PostgreSQL URL>"
+pnpm db:migrate
+```
 
-`/` is public. `/sign-in` and `/sign-up` are public Clerk-hosting routes with optional catch-all segments for multi-step flows. `/profile` and all workspace pages are private. A signed-out request to a private page redirects to `/sign-in`, with its destination preserved for return after sign-in. Private `/api` paths deny unauthenticated requests with `401` when Clerk is configured, or `503` when its keys are absent.
+Drizzle Kit reads `DATABASE_URL` from the shell process; unlike the Next.js app, it does not automatically load `.env.local` in this repository.
 
-The workspace includes `/dashboard`, `/research-articles`, `/doi-lookup`, `/books`, `/ai-analyzer`, `/studies`, `/collections`, and study-specific `/studies/[studyId]/analysis`, `/literature`, and `/rrl`. Those research pages still explain their later-phase status. The account button opens Clerk profile and sign-out actions; `/profile` provides the full profile screen.
+`pnpm db:generate` generates a migration after an intentional schema change. `pnpm db:push` is only for disposable local experiments. `pnpm db:studio` opens Drizzle Studio. There are no production seed records and no fabricated academic references.
 
-## Server authorization handoff
+The database integration suites use clearly labelled synthetic fixtures, clean them up, and require a database the developer controls. Do not point destructive development workflows at shared or production data. PostgreSQL does not have an automatic down migration here; back up data before rebuilding a disposable database.
 
-In every private Server Component, Server Action, or route handler, call `await requireUserId()` from `src/server/auth.ts` immediately before reading or changing user data. Never take an owner ID from browser input. For a user-owned row, load it and call `requireOwnedRecord(row, ownerId)` before returning or mutating it. The helper returns the row to its owner and returns a 404 for absent or foreign rows. `UserProfile.id` is internal: resolve it from the authenticated Clerk ID (`clerkUserId`) and use that internal ID as `ownerId` when checking rows whose `userId` references `UserProfile.id`. Scope list queries by that same internal ID at the database query level.
+## Clerk and external services
 
-`src/middleware.ts` provides a request boundary for all current workspace paths and `/api`; the workspace server layout repeats the session check. New data access must use the server helpers near the query or mutation because a layout alone does not authorize a record or rerun on every client navigation.
+Create a Clerk application with email sign-up/sign-in and configure both Clerk keys from the same instance. Configure the free OpenAlex API key, Crossref contact email, Google Books API key, UploadThing token, and Gemini API key. The approved default `GEMINI_MODEL` is `gemini-3.8-flash`.
 
-Phase 03 repositories call `getCurrentUserProfile()` in `src/server/repositories/profiles.ts` to derive the Clerk ID from `requireUserId()` and upsert the corresponding internal `UserProfile`. Never accept a Clerk ID or `UserProfile.id` from client input. User-owned repositories scope each query by the resolved internal profile; nested study/draft data is reached only after an owner-scoped parent check. Public normalized `Resource` records can be shared. Use `deleteStudy(studyId, deleteStoredFile)` when study file storage is introduced so the external object is removed before the database cascade.
+UploadThing must remain on the authenticated `studyUploader` route. The application performs extension, MIME, size, and content-signature validation before creating a Study. The configured maximum is controlled by `MAX_STUDY_FILE_MB` and defaults to 50 MB.
 
-## Checks
+## Local start
 
-Run `pnpm test:auth`, `pnpm test:db`, `pnpm lint`, `pnpm typecheck`, and `pnpm build`. For database setup, run `pnpm db:generate` and `pnpm db:migrate`; live migration checks need a configured PostgreSQL `DATABASE_URL`. Other credentials listed in `.env.example` are for later phases.
+```powershell
+pnpm install
+$env:DATABASE_URL = "<your PostgreSQL URL>"
+pnpm db:migrate
+pnpm dev
+```
+
+Open `http://localhost:3000`, create or sign in to a Clerk account, and open `/dashboard`.
+
+For a production-like local run:
+
+```powershell
+pnpm build
+pnpm start
+```
+
+## Verification
+
+Run every phase suite and the final quality gates:
+
+```powershell
+pnpm test:auth
+pnpm test:db
+pnpm test:discovery
+pnpm test:citation
+pnpm test:studies
+pnpm test:analysis
+pnpm test:literature
+pnpm test:integrity
+pnpm test:rrl
+pnpm test:rrl-audit
+pnpm test:dashboard
+pnpm lint
+pnpm typecheck
+pnpm build
+git diff --check
+```
+
+Live-provider verification is separate from fixture tests. A missing key, exhausted free quota, provider outage, or database connection reset is `BLOCKED`, not a mocked pass. Never enable paid OpenAlex or Gemini usage to make a check pass.
+
+## Ownership and security conventions
+
+All workspace routes and `/api` routes are authenticated. Repositories derive the current Clerk principal server-side with `getCurrentUserProfile()` and filter by the internal `UserProfile.id`; browser-supplied owner IDs are never accepted. Nested Study, source-selection, RRL, citation-detail, audit, and export access resolves through an owner-scoped Study. Canonical Resource metadata is shared, while saved state, notes, tags, collections, studies, analyses, selections, drafts, links, and audits are private.
+
+Deleting a Study first deletes its UploadThing object and then the database row, whose foreign-key cascades remove analyses, sections, related-source associations, drafts, source snapshots, citation links, and audits. If storage deletion fails, the Study remains for retry. A post-storage database failure is surfaced as a retryable partial failure. Shared canonical Resources are not deleted with a Study.
+
+## Known external limits
+
+- OpenAlex, Google Books, Crossref, UploadThing, and Gemini can rate-limit or become unavailable. HCCite shows retryable/unknown states and preserves saved data.
+- OpenAlex and Gemini must remain on free usage; the app never activates paid capacity automatically.
+- Gemini processing uses bounded retries. A real `429 RESOURCE_EXHAUSTED` can block a live Study Profile or RRL check even when local retry/idempotency logic passes.
+- Crossref outage never implies a verified DOI or clean integrity state. Existing adverse evidence is retained.
+- UploadThing free-plan files are public by URL. Do not upload confidential, sensitive, or unpublished research documents.
+- Gemini Free Tier has privacy and quota constraints. Use only non-confidential/demo studies.
+- Remote/serverless PostgreSQL can occasionally reset long-running integration-test connections; rerun the affected suite and report the exact external error if it persists.
+
+## Suggested demo flow
+
+1. Sign in and show the owner-scoped dashboard and empty/real record states.
+2. Search OpenAlex, look up a DOI with Crossref, and search Google Books.
+3. Save a source, generate APA/MLA/Chicago citations, add notes/tags, and add it to a collection.
+4. Upload a non-confidential PDF or DOCX and process its Study Profile.
+5. Find related literature, inspect Source Health, and select sources.
+6. Generate an RRL, open a `[HCCITE:S#]` citation detail, and run Bibliography Audit.
+7. Show that export works only for the exact current passing audit; edit the draft to make the audit stale, then re-audit.
+8. Delete the Study and confirm its stored object and owned descendants are removed while shared Resources remain.

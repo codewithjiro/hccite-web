@@ -14,8 +14,8 @@ if (process.env.RUN_PHASE08_LIVE !== "1") throw new Error("Set RUN_PHASE08_LIVE=
 const client = postgres(process.env.DATABASE_URL, { max: 1 });
 let createdAssociationId = null, createdResourceId = null, restoreAssociation = null;
 try {
-  const [fixture] = await client`select s.id, u.clerk_user_id from public.hccite_study s join public.hccite_user_profile u on u.id=s.user_id join public.hccite_study_analysis a on a.study_id=s.id where s.status='ready' order by s.updated_at desc limit 1`;
-  assert.ok(fixture, "A ready non-confidential Study Profile is required for live verification.");
+  const [fixture] = await client`select s.id, u.clerk_user_id from public.hccite_study s join public.hccite_user_profile u on u.id=s.user_id join public.hccite_study_analysis a on a.study_id=s.id where s.status='ready' and (jsonb_array_length(a.suggested_queries) > 0 or jsonb_array_length(a.keywords) > 0 or jsonb_array_length(a.variables_or_concepts) > 0 or nullif(trim(a.research_problem), '') is not null) order by s.updated_at desc limit 1`;
+  assert.ok(fixture, "A ready non-confidential Study Profile with search concepts is required for live verification.");
   setTestIdentity(fixture.clerk_user_id);
   const { profile } = await getOwnedStudyProfile(fixture.id);
   const queries = deriveLiteratureQueries(profile);
@@ -40,9 +40,9 @@ try {
   const repeated = await associateLiteratureSource(fixture.id, { provider: candidate.source, providerIdentifier: candidate.sourceIdentifier });
   assert.equal(repeated.association.id, associated.association.id);
   assert.equal((await listStudyRelatedSources(fixture.id)).filter((row) => row.resource.id === associated.resource.id).length, 1);
-  assert.equal((await setLiteratureSelection(fixture.id, { associationId: associated.association.id, selected: true })).selectedForRrl, true);
-  assert.equal((await setLiteratureSelection(fixture.id, { associationId: associated.association.id, selected: true })).selectedForRrl, true);
-  assert.equal((await setLiteratureSelection(fixture.id, { associationId: associated.association.id, selected: false })).selectedForRrl, false);
+  assert.equal((await setLiteratureSelection(fixture.id, { associationId: associated.association.id, selected: true })).association.selectedForRrl, true);
+  assert.equal((await setLiteratureSelection(fixture.id, { associationId: associated.association.id, selected: true })).association.selectedForRrl, true);
+  assert.equal((await setLiteratureSelection(fixture.id, { associationId: associated.association.id, selected: false })).association.selectedForRrl, false);
   const relevance = await explainRelevance(profile, candidate);
   assert.ok(relevance.reason && relevance.score >= 0 && relevance.score <= 1);
   setTestIdentity(`phase08-foreign-${Date.now()}`);

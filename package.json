@@ -23,6 +23,7 @@
     "test:integrity": "node --experimental-strip-types --import ./tests/discovery-test-loader.mjs --test tests/integrity.test.mjs",
     "test:rrl": "node --experimental-strip-types --import ./tests/discovery-test-loader.mjs --test tests/rrl.test.mjs",
     "test:rrl-audit": "node --experimental-strip-types --import ./tests/discovery-test-loader.mjs --test tests/rrl-audit.test.mjs && node --experimental-strip-types --import ./tests/db-test-loader.mjs --test tests/rrl-audit-db.test.mjs",
+    "test:dashboard": "node --experimental-strip-types --import ./tests/db-test-loader.mjs --test tests/dashboard-db.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

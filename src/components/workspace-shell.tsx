@@ -52,7 +52,7 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
           <div className="flex shrink-0 items-center gap-2">
             <ThemeControl />
             <Link href="/" className="hidden min-h-11 items-center rounded-xl px-3 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring sm:inline-flex">Home</Link>
-            <Link href="/profile" aria-label="My account" className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring sm:px-3"><UserRound aria-hidden="true" className="size-4" /><span className="hidden lg:inline">My account</span></Link>
+            <Link href="/profile" aria-label="My account" className="hidden min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring sm:inline-flex"><UserRound aria-hidden="true" className="size-4" /><span className="hidden lg:inline">My account</span></Link>
             <UserButton userProfileMode="navigation" userProfileUrl="/profile" fallback={<span role="status" className="text-xs text-muted-foreground">Loading…</span>} />
           </div>
         </div>
