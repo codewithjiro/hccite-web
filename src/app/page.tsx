@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, BookOpen, FileSearch, LibraryBig, ShieldCheck } from "lucide-react";
+import { ArrowRight, BookOpen, FileSearch, GraduationCap, Info, LibraryBig, ShieldCheck, UserRoundPlus } from "lucide-react";
 import { Brand } from "~/components/brand";
 import { ThemeControl } from "~/components/theme-control";
 import { LandingAuthLinks } from "~/components/landing-auth-links";
@@ -37,14 +37,14 @@ export default async function HomePage() {
         <section className="overflow-hidden bg-gradient-to-b from-sky-50 to-background px-4 py-12 dark:from-slate-950 sm:px-6 sm:py-16 lg:px-8 lg:py-24">
           <div className="mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.03fr)] lg:gap-14">
             <div className="max-w-2xl">
-              <p className="mb-5 inline-flex rounded-full border border-primary/20 bg-primary/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.13em] text-primary">A research workspace for Holy Cross College</p>
+              <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.13em] text-primary"><GraduationCap aria-hidden="true" className="size-4 shrink-0" />A research workspace for Holy Cross College</p>
               <h1 className="text-4xl font-bold leading-[1.12] tracking-tight text-foreground sm:text-5xl lg:text-6xl">Make every source <span className="text-primary">count.</span></h1>
               <p className="mt-6 max-w-xl text-lg leading-8 text-muted-foreground">HCCite is being built to help researchers discover literature, manage references, analyze studies, and write with a clear trail back to real sources.</p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link href="/dashboard" prefetch={false} className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Open workspace <ArrowRight aria-hidden="true" className="size-4" /></Link>
-                <Link href="/sign-up" className="inline-flex min-h-12 items-center rounded-xl border border-border bg-card px-5 text-sm font-semibold text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Create an account</Link>
+                <Link href="/sign-up" className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-border bg-card px-5 text-sm font-semibold text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"><UserRoundPlus aria-hidden="true" className="size-4" />Create an account</Link>
               </div>
-              <p className="mt-5 text-sm text-muted-foreground">Sign in to access your workspace. Research tools are being added in later phases.</p>
+              <p className="mt-5 flex items-start gap-2 text-sm text-muted-foreground"><Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" /><span>Sign in to access your workspace. Research tools are being added in later phases.</span></p>
             </div>
             <div className="rounded-[2rem] border border-border bg-card p-2 shadow-xl shadow-blue-950/10 dark:shadow-black/20 sm:p-3">
               <Image src="/assets/hero.png" alt="Holy Cross College campus building in Sta. Ana, Pampanga" width={3800} height={2534} priority sizes="(max-width: 1024px) 100vw, 50vw" className="h-auto w-full rounded-[1.4rem]" />
