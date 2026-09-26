@@ -45,7 +45,7 @@ export async function getGoogleBookById(input: string, options: { fetcher?: type
   return resource;
 }
 
-export async function searchGoogleBooks(query: string, startIndex: number, options: { fetcher?: typeof fetch; apiKey?: string } = {}) {
+export async function searchGoogleBooks(query: string, startIndex: number, options: { fetcher?: typeof fetch; apiKey?: string; year?: number } = {}) {
   const apiKey = options.apiKey ?? env.GOOGLE_BOOKS_API_KEY;
   if (!apiKey) throw new ProviderError("google_books", "missing_credentials", "Google Books API key is not configured.");
   const url = new URL("https://www.googleapis.com/books/v1/volumes");
@@ -55,5 +55,6 @@ export async function searchGoogleBooks(query: string, startIndex: number, optio
   const parsed = responseSchema.safeParse(payload);
   if (!parsed.success) throw new ProviderError("google_books", "malformed_response", "Google Books response did not match the expected volumes format.");
   const retrievedAt = new Date();
-  return { items: parsed.data.items.map((volume) => mapVolume(volume, retrievedAt)), total: parsed.data.totalItems, startIndex, hasMore: startIndex + parsed.data.items.length < parsed.data.totalItems };
+  const items = parsed.data.items.map((volume) => mapVolume(volume, retrievedAt));
+  return { items: options.year === undefined ? items : items.filter((item) => item.year === options.year), total: parsed.data.totalItems, startIndex, hasMore: startIndex + parsed.data.items.length < parsed.data.totalItems };
 }

@@ -152,6 +152,17 @@ test("Google Books handles empty and sparse records, validates URLs, and surface
   await assert.rejects(searchGoogleBooks("book", 0, { apiKey: "fixture-only", fetcher: async () => new Response("{}", { status: 503 }) }), (error) => error.code === "provider_outage");
 });
 
+test("Google Books publication year filter keeps exact-year matches and preserves pagination", async () => {
+  const fetcher = async () => new Response(JSON.stringify({ totalItems: 40, items: [
+    { id: "book-2020", volumeInfo: { title: "Older", publishedDate: "2020-12-01" } },
+    { id: "book-2021", volumeInfo: { title: "Matching", publishedDate: "2021-03-01" } },
+    { id: "book-undated", volumeInfo: { title: "Undated" } },
+  ] }), { status: 200 });
+  const result = await searchGoogleBooks("history", 0, { apiKey: "fixture", fetcher, year: 2021 });
+  assert.deepEqual(result.items.map((item) => item.title), ["Matching"]);
+  assert.equal(result.hasMore, true);
+});
+
 test("discovery save accepts only strict, safe provider locators", () => {
   const valid = [
     { provider: "openalex", providerIdentifier: "W123" },
