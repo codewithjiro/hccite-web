@@ -63,7 +63,7 @@ export async function getOpenAlexWorkById(input: string, options: { fetcher?: ty
   return resource;
 }
 
-export async function searchOpenAlex(query: string, page: number, options: { fetcher?: typeof fetch; apiKey?: string; yearFrom?: number; openAccess?: boolean } = {}) {
+export async function searchOpenAlex(query: string, page: number, options: { fetcher?: typeof fetch; apiKey?: string; yearFrom?: number; yearTo?: number; openAccess?: boolean } = {}) {
   const apiKey = options.apiKey !== undefined ? options.apiKey.trim() : getServerEnv("OPENALEX_API_KEY")?.trim();
   if (!apiKey) throw new ProviderError("openalex", "missing_credentials", "OpenAlex API key is missing. Set OPENALEX_API_KEY in .env.local for development or in Vercel project settings for deployments.");
   const url = new URL("https://api.openalex.org/works");
@@ -71,7 +71,7 @@ export async function searchOpenAlex(query: string, page: number, options: { fet
   url.searchParams.set("search", query);
   url.searchParams.set("page", String(page));
   url.searchParams.set("per_page", "20");
-  const filters = [options.yearFrom ? `from_publication_date:${options.yearFrom}-01-01` : null, options.openAccess === undefined ? null : `is_oa:${options.openAccess}`].filter(Boolean);
+  const filters = [options.yearFrom ? `from_publication_date:${options.yearFrom}-01-01` : null, options.yearTo ? `to_publication_date:${options.yearTo}-12-31` : null, options.openAccess === undefined ? null : `is_oa:${options.openAccess}`].filter(Boolean);
   if (filters.length) url.searchParams.set("filter", filters.join(","));
   url.searchParams.set("select", "id,display_name,authorships,publication_year,publication_date,doi,type,primary_location,abstract_inverted_index,open_access");
   const payload = await providerJson<unknown>("openalex", url, undefined, options.fetcher);

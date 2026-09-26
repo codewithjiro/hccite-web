@@ -77,6 +77,15 @@ test("OpenAlex keeps valid works when one selected record has malformed nested m
   assert.equal(result.warnings[0].code, "partial_records");
 });
 
+test("OpenAlex passes both publication year bounds to the provider", async () => {
+  let requested;
+  await searchOpenAlex("history", 1, { apiKey: "fixture", yearFrom: 2005, yearTo: 2010, fetcher: async (input) => {
+    requested = new URL(input);
+    return Response.json({ meta: { count: 0, page: 1, per_page: 20 }, results: [] });
+  } });
+  assert.equal(requested.searchParams.get("filter"), "from_publication_date:2005-01-01,to_publication_date:2010-12-31");
+});
+
 test("OpenAlex distinguishes malformed envelopes, unusable pages, and genuine zero results", async () => {
   const fetcher = (payload) => async () => Response.json(payload);
   await assert.rejects(searchOpenAlex("x", 1, { apiKey: "fixture", fetcher: fetcher({ meta: { count: 1 }, results: {} }) }), (error) => error instanceof ProviderError && error.code === "malformed_response");
@@ -152,15 +161,17 @@ test("Google Books handles empty and sparse records, validates URLs, and surface
   await assert.rejects(searchGoogleBooks("book", 0, { apiKey: "fixture-only", fetcher: async () => new Response("{}", { status: 503 }) }), (error) => error.code === "provider_outage");
 });
 
-test("Google Books publication year filter keeps exact-year matches and preserves pagination", async () => {
+test("Google Books publication year range keeps matching years and preserves pagination", async () => {
   const fetcher = async () => new Response(JSON.stringify({ totalItems: 40, items: [
     { id: "book-2020", volumeInfo: { title: "Older", publishedDate: "2020-12-01" } },
     { id: "book-2021", volumeInfo: { title: "Matching", publishedDate: "2021-03-01" } },
     { id: "book-undated", volumeInfo: { title: "Undated" } },
   ] }), { status: 200 });
-  const result = await searchGoogleBooks("history", 0, { apiKey: "fixture", fetcher, year: 2021 });
-  assert.deepEqual(result.items.map((item) => item.title), ["Matching"]);
+  const result = await searchGoogleBooks("history", 0, { apiKey: "fixture", fetcher, yearFrom: 2020, yearTo: 2021 });
+  assert.deepEqual(result.items.map((item) => item.title), ["Older", "Matching"]);
   assert.equal(result.hasMore, true);
+  const openEnded = await searchGoogleBooks("history", 0, { apiKey: "fixture", fetcher, yearFrom: 2021 });
+  assert.deepEqual(openEnded.items.map((item) => item.title), ["Matching"]);
 });
 
 test("discovery save accepts only strict, safe provider locators", () => {

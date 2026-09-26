@@ -32,7 +32,9 @@ export function DiscoveryWorkspace({ kind }: { kind: DiscoveryKind }) {
   const [page, setPage] = useState(1);
   const [startIndex, setStartIndex] = useState(0);
   const [yearFrom, setYearFrom] = useState("");
-  const [bookYear, setBookYear] = useState("");
+  const [yearTo, setYearTo] = useState("");
+  const [bookYearFrom, setBookYearFrom] = useState("");
+  const [bookYearTo, setBookYearTo] = useState("");
   const [openAccess, setOpenAccess] = useState("any");
   const [results, setResults] = useState<NormalizedResource[]>([]);
   const [total, setTotal] = useState<number | null>(null);
@@ -59,6 +61,14 @@ export function DiscoveryWorkspace({ kind }: { kind: DiscoveryKind }) {
       toast.error(validationError.message);
       return;
     }
+    const from = kind === "books" ? bookYearFrom : yearFrom;
+    const to = kind === "books" ? bookYearTo : yearTo;
+    if (kind !== "doi" && from && to && Number(from) > Number(to)) {
+      const message = "The end year must be the same as or later than the start year.";
+      setError({ provider: config.provider, code: "invalid_input", message, retryable: false });
+      toast.error(message);
+      return;
+    }
     searchInFlight.current = true;
     setLoading(true); setError(null); setStatus(""); setHasSearched(true); setPage(nextPage); setStartIndex(nextStartIndex);
     try {
@@ -66,11 +76,13 @@ export function DiscoveryWorkspace({ kind }: { kind: DiscoveryKind }) {
       if (kind === "articles") {
         const params = new URLSearchParams({ q, page: String(nextPage) });
         if (yearFrom) params.set("yearFrom", yearFrom);
+        if (yearTo || yearFrom) params.set("yearTo", yearTo || String(new Date().getFullYear()));
         if (openAccess !== "any") params.set("openAccess", openAccess);
         url = `/api/discovery/openalex?${params}`;
       } else if (kind === "books") {
         const params = new URLSearchParams({ q, startIndex: String(nextStartIndex) });
-        if (bookYear) params.set("year", bookYear);
+        if (bookYearFrom) params.set("yearFrom", bookYearFrom);
+        if (bookYearTo || bookYearFrom) params.set("yearTo", bookYearTo || String(new Date().getFullYear()));
         url = `/api/discovery/books?${params}`;
       } else {
         url = `/api/discovery/crossref?${new URLSearchParams({ q, mode })}`;
@@ -166,10 +178,10 @@ export function DiscoveryWorkspace({ kind }: { kind: DiscoveryKind }) {
           </button>
         </div>
         {kind === "articles" && <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <label className="space-y-1 text-sm"><span className="font-medium">Published from</span><input type="number" min="1000" max={new Date().getFullYear()} value={yearFrom} onChange={(event) => setYearFrom(event.target.value)} placeholder="Any year" className="min-h-11 w-full rounded-xl border border-input bg-background px-3 outline-none focus-visible:ring-2 focus-visible:ring-ring" /></label>
+          <div className="grid gap-3 sm:grid-cols-2"><label className="space-y-1 text-sm"><span className="font-medium">Published from</span><input type="number" min="1000" max={new Date().getFullYear()} value={yearFrom} onChange={(event) => setYearFrom(event.target.value)} placeholder="e.g. 2005" className="min-h-11 w-full rounded-xl border border-input bg-background px-3 outline-none focus-visible:ring-2 focus-visible:ring-ring" /></label><label className="space-y-1 text-sm"><span className="font-medium">Published to</span><input type="number" min="1000" max={new Date().getFullYear()} value={yearTo} onChange={(event) => setYearTo(event.target.value)} placeholder="Current year" className="min-h-11 w-full rounded-xl border border-input bg-background px-3 outline-none focus-visible:ring-2 focus-visible:ring-ring" /></label></div>
           <label className="space-y-1 text-sm"><span className="font-medium">Open Access</span><select value={openAccess} onChange={(event) => setOpenAccess(event.target.value)} className="min-h-11 w-full rounded-xl border border-input bg-background px-3 outline-none focus-visible:ring-2 focus-visible:ring-ring"><option value="any">Any access status</option><option value="true">OpenAlex reports open access</option><option value="false">OpenAlex reports not open access</option></select></label>
         </div>}
-        {kind === "books" && <label className="mt-4 block space-y-1 text-sm"><span className="font-medium">Publication year</span><input type="number" min="1000" max={new Date().getFullYear()} value={bookYear} onChange={(event) => { setBookYear(event.target.value); setResults([]); setHasSearched(false); setHasMore(false); }} placeholder="Any year" className="min-h-11 w-full rounded-xl border border-input bg-background px-3 outline-none focus-visible:ring-2 focus-visible:ring-ring sm:max-w-48" /></label>}
+        {kind === "books" && <div className="mt-4 grid gap-3 sm:max-w-md sm:grid-cols-2"><label className="space-y-1 text-sm"><span className="font-medium">Published from</span><input type="number" min="1000" max={new Date().getFullYear()} value={bookYearFrom} onChange={(event) => { setBookYearFrom(event.target.value); setResults([]); setHasSearched(false); setHasMore(false); }} placeholder="e.g. 2005" className="min-h-11 w-full rounded-xl border border-input bg-background px-3 outline-none focus-visible:ring-2 focus-visible:ring-ring" /></label><label className="space-y-1 text-sm"><span className="font-medium">Published to</span><input type="number" min="1000" max={new Date().getFullYear()} value={bookYearTo} onChange={(event) => { setBookYearTo(event.target.value); setResults([]); setHasSearched(false); setHasMore(false); }} placeholder="Current year" className="min-h-11 w-full rounded-xl border border-input bg-background px-3 outline-none focus-visible:ring-2 focus-visible:ring-ring" /></label></div>}
         <p className="mt-3 text-xs text-muted-foreground">Source: {config.provider}. Metadata below is provider supplied; missing fields are left blank.</p>
       </form>
 
@@ -182,7 +194,7 @@ export function DiscoveryWorkspace({ kind }: { kind: DiscoveryKind }) {
       {status && !error && <p role="status" className="break-words rounded-xl border border-border bg-muted/50 p-4 text-sm">{status}</p>}
       {!loading && hasSearched && !error && results.length === 0 && <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center"><BookOpen className="mx-auto size-8 text-muted-foreground" /><h2 className="mt-3 font-semibold">No matching results in this batch</h2><p className="mt-1 text-sm text-muted-foreground">{hasMore ? "Load more to check the next books, or try another search." : "Try a broader query or check the spelling."}</p></div>}
       {(!!results.length || (kind === "books" && hasMore && hasSearched)) && <div className="space-y-4">
-        {!!results.length && <div className="flex items-center justify-between gap-3"><h2 className="font-semibold">Results</h2><span className="text-sm text-muted-foreground">{kind === "books" && bookYear ? `${results.length} shown` : total === null ? results.length : `${results.length} shown${total ? ` · ${total.toLocaleString()} reported` : ""}`}</span></div>}
+        {!!results.length && <div className="flex items-center justify-between gap-3"><h2 className="font-semibold">Results</h2><span className="text-sm text-muted-foreground">{kind === "books" && (bookYearFrom || bookYearTo) ? `${results.length} shown` : total === null ? results.length : `${results.length} shown${total ? ` · ${total.toLocaleString()} reported` : ""}`}</span></div>}
         {results.map((resource, index) => <ResultCard key={`${resource.source}-${resource.sourceIdentifier}-${index}`} resource={resource} onSave={save} onUnsave={unsave} onAddCollection={addToCollection} savedId={savedIdFor(resource)} collections={library?.collections ?? []} busy={mutating} />)}
         {hasMore && <div className="flex justify-center"><button type="button" disabled={loading} onClick={next} className="min-h-12 rounded-xl border border-border bg-card px-6 text-sm font-semibold hover:bg-muted disabled:opacity-60">{loading ? "Loading…" : "Load more"}</button></div>}
       </div>}
