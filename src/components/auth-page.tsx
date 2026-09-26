@@ -11,13 +11,13 @@ export function AuthPage({ mode }: { mode: "sign-in" | "sign-up" }) {
   );
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex min-h-screen flex-col bg-background">
       <a href="#auth-main" className="skip-link">Skip to content</a>
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-4 py-3 sm:px-6">
         <Brand />
         <ThemeControl />
       </header>
-      <main id="auth-main" className="mx-auto max-w-lg px-4 py-12 sm:py-20">
+      <main id="auth-main" className="mx-auto w-full max-w-lg flex-1 px-4 py-12 sm:py-20">
         <div className="mb-7 text-center">
           <span className="inline-flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary"><UserRound aria-hidden="true" className="size-6" /></span>
           <h1 className="mt-4 text-3xl font-bold tracking-tight">{heading}</h1>

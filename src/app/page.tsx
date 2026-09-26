@@ -1,13 +1,14 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight, BookOpen, FileSearch, GraduationCap, Info, LibraryBig, Mail, MapPin, ShieldCheck, UserRoundPlus } from "lucide-react";
+import { ArrowUpRight, BookOpen, FileSearch, GraduationCap, Info, LibraryBig, Mail, MapPin, ShieldCheck, UserRoundPlus } from "lucide-react";
 import { Brand } from "~/components/brand";
 import { ThemeControl } from "~/components/theme-control";
 import { LandingAuthLinks } from "~/components/landing-auth-links";
+import { HeroParticles } from "~/components/hero-particles";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 
-const plannedFeatures = [
+const availableFeatures = [
   { title: "Discover sources", description: "Find scholarly articles and books, then inspect their bibliographic details.", icon: FileSearch },
   { title: "Keep your library", description: "Collect useful references, organize them, and prepare citations.", icon: LibraryBig },
   { title: "Work from your study", description: "Analyze a study and use selected literature to support an editable review.", icon: BookOpen },
@@ -15,10 +16,10 @@ const plannedFeatures = [
 ];
 
 const developers = [
-  { name: "Jenah Ambagan", image: "/picture/jenah.png" },
-  { name: "Venice Bumagat", image: "/picture/venice.png" },
-  { name: "Jiro Gonzales", image: "/picture/jiro.jpg" },
-  { name: "Nicole Manaloto", image: "/picture/nicole.png" },
+  { name: "Jenah Ambagan", image: "/picture/jenah.png", tone: "from-sky-300/30 via-blue-400/10 to-indigo-500/25" },
+  { name: "Venice Bumagat", image: "/picture/venice.png", tone: "from-violet-300/30 via-fuchsia-400/10 to-pink-500/25" },
+  { name: "Jiro Gonzales", image: "/picture/jiro.jpg", tone: "from-cyan-300/30 via-teal-400/10 to-emerald-500/25" },
+  { name: "Nicole Manaloto", image: "/picture/nicole.png", tone: "from-amber-300/30 via-orange-400/10 to-rose-500/25" },
 ];
 
 const pageNavigation = [
@@ -56,16 +57,16 @@ export default async function HomePage() {
             <div className="absolute -right-48 top-1/4 size-[34rem] rounded-full bg-cyan-400/10 blur-[120px]" />
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           </div>
+          <HeroParticles />
           <div className="relative mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:gap-14">
             <div className="max-w-2xl">
               <p className="mb-6 inline-flex max-w-full items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-4 py-2 text-[0.7rem] font-bold uppercase tracking-[0.13em] text-primary shadow-sm shadow-primary/5 sm:text-xs"><GraduationCap aria-hidden="true" className="size-4 shrink-0" />A research workspace for Holy Cross College</p>
               <h1 className="text-4xl font-bold leading-[1.06] tracking-[-0.045em] text-foreground sm:text-6xl lg:text-[4.5rem]">Make every source <span className="text-primary">count.</span></h1>
-              <p className="mt-6 max-w-xl text-lg leading-8 text-muted-foreground sm:text-xl">HCCite is being built to help researchers discover literature, manage references, analyze studies, and write with a clear trail back to real sources.</p>
+              <p className="mt-6 max-w-xl text-lg leading-8 text-muted-foreground sm:text-xl">HCCite helps researchers discover literature, manage references, analyze studies, and write with a clear trail back to real sources.</p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link href="/dashboard" prefetch={false} className="group inline-flex min-h-12 items-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/25 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Open workspace <ArrowRight aria-hidden="true" className="size-4 transition-transform group-hover:translate-x-0.5" /></Link>
                 <Link href="/sign-up" className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-border/90 bg-card/80 px-5 text-sm font-semibold text-foreground shadow-sm transition-colors hover:border-primary/35 hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"><UserRoundPlus aria-hidden="true" className="size-4" />Create an account</Link>
               </div>
-              <p className="mt-5 flex max-w-xl items-start gap-2 text-sm leading-6 text-muted-foreground"><Info aria-hidden="true" className="mt-1 size-4 shrink-0 text-primary/80" /><span>Sign in to access your workspace. Research tools are being added in later phases.</span></p>
+              <p className="mt-5 flex max-w-xl items-start gap-2 text-sm leading-6 text-muted-foreground"><Info aria-hidden="true" className="mt-1 size-4 shrink-0 text-primary/80" /><span>Sign in to search, save, and work with your research.</span></p>
             </div>
             <div className="group relative rounded-[2rem] border border-border/80 bg-card/70 p-2 shadow-2xl shadow-slate-950/10 ring-1 ring-white/10 backdrop-blur-sm dark:shadow-black/30 sm:rounded-[2.25rem] sm:p-3">
               <div className="relative overflow-hidden rounded-[1.5rem] sm:rounded-[1.75rem]">
@@ -86,10 +87,10 @@ export default async function HomePage() {
             <div className="max-w-2xl">
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Built around your research process</p>
               <h2 id="features-heading" className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">One place for the research journey</h2>
-              <p className="mt-4 text-base leading-7 text-muted-foreground">These capabilities are on the roadmap. The current build provides the foundation and route preview.</p>
+              <p className="mt-4 text-base leading-7 text-muted-foreground">Discover sources, organize references, and build research grounded in evidence.</p>
             </div>
             <div className="mt-9 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {plannedFeatures.map(({ title, description, icon: Icon }, index) => (
+              {availableFeatures.map(({ title, description, icon: Icon }, index) => (
                 <article key={title} className="group relative overflow-hidden rounded-2xl border border-border/80 bg-card p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 sm:rounded-3xl">
                   <span aria-hidden="true" className="absolute right-5 top-5 font-mono text-xs font-semibold tracking-widest text-muted-foreground/50">0{index + 1}</span>
                   <span className="mb-5 inline-flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/10 transition-colors group-hover:bg-primary/15"><Icon aria-hidden="true" className="size-5" /></span>
@@ -106,7 +107,7 @@ export default async function HomePage() {
             <div>
               <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-primary"><span className="h-px w-6 bg-primary" />About HCCite</p>
               <h2 id="about-heading" className="mt-4 max-w-xl text-3xl font-bold leading-tight tracking-tight sm:text-4xl">Research is stronger when every source has a clear path.</h2>
-              <p className="mt-5 max-w-xl text-base leading-7 text-muted-foreground">HCCite is being developed as a research workspace for Holy Cross College. Its goal is to bring source discovery, reference organization, citation tools, and study analysis together while keeping research connected to its sources.</p>
+              <p className="mt-5 max-w-xl text-base leading-7 text-muted-foreground">HCCite brings source discovery, reference organization, citation tools, and study analysis together for Holy Cross College while keeping research connected to its sources.</p>
             </div>
             <div className="relative overflow-hidden rounded-3xl border border-border/80 bg-card p-6 shadow-lg shadow-slate-950/[0.04] sm:p-8">
               <div aria-hidden="true" className="absolute -right-16 -top-20 size-56 rounded-full bg-primary/10 blur-3xl" />
@@ -132,12 +133,20 @@ export default async function HomePage() {
             <div className="mt-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
               {developers.map((developer) => (
                 <article key={developer.name} className="group overflow-hidden rounded-3xl border border-border/80 bg-card shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-xl hover:shadow-primary/5">
-                  <div className="relative aspect-[4/3] overflow-hidden bg-white">
-                    <Image src={developer.image} alt={`${developer.name} portrait`} fill sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 25vw" className="object-cover object-[center_38%] transition-transform duration-500 group-hover:scale-[1.03]" />
+                  <div className={`relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-gradient-to-br ${developer.tone}`}>
+                    <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(255,255,255,0.55),transparent_46%)] dark:bg-[radial-gradient(circle_at_50%_42%,rgba(255,255,255,0.12),transparent_46%)]" />
+                    <div aria-hidden="true" className="absolute -right-12 -top-14 size-40 rounded-full border border-white/30 bg-white/10 transition-transform duration-500 group-hover:scale-110" />
+                    <div aria-hidden="true" className="absolute -bottom-20 -left-12 size-48 rounded-full border border-white/30 bg-white/10" />
+                    <div className="relative size-36 rounded-full bg-gradient-to-br from-white/90 via-primary/70 to-cyan-400/80 p-1 shadow-2xl shadow-slate-950/25 transition-transform duration-300 group-hover:scale-[1.04] sm:size-40">
+                      <div className="relative size-full overflow-hidden rounded-full border-[3px] border-background/90 bg-white ring-1 ring-white/80">
+                        <Image src={developer.image} alt={`${developer.name} portrait`} fill sizes="(max-width: 640px) 144px, 160px" className="object-cover object-[center_38%]" />
+                      </div>
+                    </div>
                   </div>
-                  <div className="p-5">
+                  <div className="relative flex flex-col items-center px-5 pb-6 pt-5 text-center">
+                    <span aria-hidden="true" className="mb-4 h-1 w-12 rounded-full bg-gradient-to-r from-primary/45 via-primary to-cyan-400/60" />
                     <h3 className="text-lg font-semibold tracking-tight">{developer.name}</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">Developer</p>
+                    <p className="mt-3 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary"><span aria-hidden="true" className="size-1.5 rounded-full bg-primary" />Developer</p>
                   </div>
                 </article>
               ))}
@@ -166,16 +175,6 @@ export default async function HomePage() {
         </section>
       </main>
 
-      <footer className="border-t border-border bg-card/60 px-4 py-7 sm:px-6">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 text-sm text-muted-foreground sm:flex-row">
-          <p>HCCite · Holy Cross College research workspace</p>
-          <nav aria-label="Footer navigation" className="flex flex-wrap items-center justify-center gap-4">
-            <Link href="#about" className="transition-colors hover:text-foreground">About</Link>
-            <Link href="#developers" className="transition-colors hover:text-foreground">Developers</Link>
-            <Link href="#contact" className="transition-colors hover:text-foreground">Contact</Link>
-          </nav>
-        </div>
-      </footer>
     </div>
   );
 }

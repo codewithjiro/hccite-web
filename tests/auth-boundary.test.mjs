@@ -5,7 +5,6 @@ import { isRecordOwner } from "../src/lib/ownership.ts";
 
 test("private route matching includes nested study and API paths", () => {
   for (const path of [
-    "/dashboard",
     "/research-articles",
     "/doi-lookup",
     "/books",
@@ -25,6 +24,7 @@ test("private route matching includes nested study and API paths", () => {
 test("landing, auth, assets, and lookalike path segments stay public", () => {
   for (const path of [
     "/",
+    "/dashboard",
     "/sign-in",
     "/sign-in/factor-one",
     "/sign-up",

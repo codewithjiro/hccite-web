@@ -13,8 +13,9 @@ import {
   Upload,
 } from "lucide-react";
 import { getDashboardData } from "~/server/repositories/dashboard";
+import { HeroParticles } from "~/components/hero-particles";
 
-export default async function Page() {
+export async function SignedInDashboard() {
   const dashboard = await getDashboardData();
   const metrics = [
     { label: "My Studies", value: dashboard.counts.studies, icon: Files, href: "/studies" },
@@ -30,10 +31,13 @@ export default async function Page() {
   ];
 
   return <div className="mx-auto max-w-6xl py-2 sm:py-6">
-    <div>
+    <div className="relative isolate overflow-hidden rounded-3xl border border-primary/15 bg-gradient-to-br from-primary/10 via-card to-cyan-500/10 p-6 sm:p-8">
+      <HeroParticles />
+      <div className="relative">
       <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Research workspace</p>
       <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Dashboard</h1>
       <p className="mt-3 max-w-2xl leading-7 text-muted-foreground">Your current studies, saved research, collections, and traceable RRL citation activity.</p>
+      </div>
     </div>
 
     {dashboard.unavailable.length > 0 && <div role="status" className="mt-6 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-foreground">
@@ -62,7 +66,7 @@ export default async function Page() {
     <div className="mt-10 grid gap-6 lg:grid-cols-2">
       <section aria-labelledby="recent-studies" className="min-w-0 rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
         <div className="flex items-center justify-between gap-4"><h2 id="recent-studies" className="text-xl font-semibold">Recent studies</h2><Link href="/studies" className="text-sm font-semibold text-primary hover:underline">Open My Studies</Link></div>
-        {dashboard.unavailable.includes("recentStudies") ? <Unavailable /> : dashboard.recentStudies.length === 0 ? <Empty icon={Files} title="No studies yet" text="Upload a non-confidential demo PDF or DOCX to begin." href="/studies" action="Upload a study" /> : <ul className="mt-4 divide-y divide-border">{dashboard.recentStudies.map((study) => <li key={study.id}><Link href={`/studies/${study.id}`} className="flex min-w-0 items-center gap-3 py-4 hover:text-primary"><span className="rounded-lg bg-muted p-2"><Files aria-hidden="true" className="size-4" /></span><span className="min-w-0 flex-1"><span className="block truncate font-medium">{study.title}</span><span className="mt-0.5 block text-xs text-muted-foreground">{study.fileType.toUpperCase()} · <span className="capitalize">{study.status}</span> · Updated {formatPhilippineDate(study.updatedAt)}</span></span><ArrowRight aria-hidden="true" className="size-4 shrink-0" /></Link></li>)}</ul>}
+        {dashboard.unavailable.includes("recentStudies") ? <Unavailable /> : dashboard.recentStudies.length === 0 ? <Empty icon={Files} title="No studies yet" text="Upload a PDF or DOCX to begin. Check the file privacy notice before uploading." href="/studies" action="Upload a study" /> : <ul className="mt-4 divide-y divide-border">{dashboard.recentStudies.map((study) => <li key={study.id}><Link href={`/studies/${study.id}`} className="flex min-w-0 items-center gap-3 py-4 hover:text-primary"><span className="rounded-lg bg-muted p-2"><Files aria-hidden="true" className="size-4" /></span><span className="min-w-0 flex-1"><span className="block truncate font-medium">{study.title}</span><span className="mt-0.5 block text-xs text-muted-foreground">{study.fileType.toUpperCase()} · <span className="capitalize">{study.status}</span> · Updated {formatPhilippineDate(study.updatedAt)}</span></span><ArrowRight aria-hidden="true" className="size-4 shrink-0" /></Link></li>)}</ul>}
       </section>
 
       <section aria-labelledby="recent-sources" className="min-w-0 rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">

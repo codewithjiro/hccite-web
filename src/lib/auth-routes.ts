@@ -1,5 +1,4 @@
 const privateRoots = [
-  "/dashboard",
   "/research-articles",
   "/doi-lookup",
   "/books",
