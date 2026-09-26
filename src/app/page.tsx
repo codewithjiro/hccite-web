@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight, BookOpen, FileSearch, GraduationCap, Image as ImageIcon, Info, LibraryBig, Mail, MapPin, ShieldCheck, UserRound, UserRoundPlus } from "lucide-react";
+import { ArrowRight, ArrowUpRight, BookOpen, FileSearch, GraduationCap, Info, LibraryBig, Mail, MapPin, ShieldCheck, UserRoundPlus } from "lucide-react";
 import { Brand } from "~/components/brand";
 import { ThemeControl } from "~/components/theme-control";
 import { LandingAuthLinks } from "~/components/landing-auth-links";
@@ -15,10 +15,10 @@ const plannedFeatures = [
 ];
 
 const developers = [
-  { name: "Jenah Ambagan", initials: "JA", tone: "from-sky-400/25 via-blue-500/15 to-indigo-500/20" },
-  { name: "Venice Bumagat", initials: "VB", tone: "from-violet-400/25 via-fuchsia-500/15 to-pink-500/20" },
-  { name: "Jiro Gonzales", initials: "JG", tone: "from-cyan-400/25 via-teal-500/15 to-emerald-500/20" },
-  { name: "Nicole Manaloto", initials: "NM", tone: "from-amber-400/25 via-orange-500/15 to-rose-500/20" },
+  { name: "Jenah Ambagan", image: "/picture/jenah.png" },
+  { name: "Venice Bumagat", image: "/picture/venice.png" },
+  { name: "Jiro Gonzales", image: "/picture/jiro.jpg" },
+  { name: "Nicole Manaloto", image: "/picture/nicole.png" },
 ];
 
 const pageNavigation = [
@@ -127,18 +127,13 @@ export default async function HomePage() {
             <div className="mx-auto max-w-2xl text-center">
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">The people behind HCCite</p>
               <h2 id="developers-heading" className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Meet the developers</h2>
-              <p className="mt-4 text-base leading-7 text-muted-foreground">The team behind the project, building a research workspace for the Holy Cross College community. Portraits are placeholders for now.</p>
+              <p className="mt-4 text-base leading-7 text-muted-foreground">The team behind the project, building a research workspace for the Holy Cross College community.</p>
             </div>
             <div className="mt-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
               {developers.map((developer) => (
                 <article key={developer.name} className="group overflow-hidden rounded-3xl border border-border/80 bg-card shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-xl hover:shadow-primary/5">
-                  <div role="img" aria-label={`Photo placeholder for ${developer.name}`} className={`relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-gradient-to-br ${developer.tone}`}>
-                    <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.5),transparent_38%)] dark:bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.12),transparent_38%)]" />
-                    <div className="relative flex size-28 items-center justify-center rounded-full border border-white/50 bg-white/35 text-primary shadow-lg shadow-slate-950/10 backdrop-blur-sm transition-transform duration-300 group-hover:scale-105 dark:border-white/15 dark:bg-slate-950/20">
-                      <UserRound aria-hidden="true" className="size-14 stroke-[1.25]" />
-                      <span className="absolute -bottom-1 -right-1 inline-flex size-9 items-center justify-center rounded-full border-2 border-card bg-primary text-[10px] font-bold tracking-wide text-primary-foreground">{developer.initials}</span>
-                    </div>
-                    <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full border border-white/30 bg-slate-950/35 px-3 py-1.5 text-[11px] font-medium text-white backdrop-blur"><ImageIcon aria-hidden="true" className="size-3.5" />Photo placeholder</span>
+                  <div className="relative aspect-[4/3] overflow-hidden bg-white">
+                    <Image src={developer.image} alt={`${developer.name} portrait`} fill sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 25vw" className="object-cover object-[center_38%] transition-transform duration-500 group-hover:scale-[1.03]" />
                   </div>
                   <div className="p-5">
                     <h3 className="text-lg font-semibold tracking-tight">{developer.name}</h3>
