@@ -16,10 +16,10 @@ const availableFeatures = [
 ];
 
 const developers = [
-  { name: "Jenah Ambagan", image: "/picture/jenah.png", tone: "from-sky-300/30 via-blue-400/10 to-indigo-500/25" },
-  { name: "Venice Bumagat", image: "/picture/venice.png", tone: "from-violet-300/30 via-fuchsia-400/10 to-pink-500/25" },
-  { name: "Jiro Gonzales", image: "/picture/jiro.jpg", tone: "from-cyan-300/30 via-teal-400/10 to-emerald-500/25" },
-  { name: "Nicole Manaloto", image: "/picture/nicole.png", tone: "from-amber-300/30 via-orange-400/10 to-rose-500/25" },
+  { name: "Jenah Ambagan", image: "/picture/jenah.png" },
+  { name: "Venice Bumagat", image: "/picture/venice.png" },
+  { name: "Jiro Gonzales", image: "/picture/jiro.jpg" },
+  { name: "Nicole Manaloto", image: "/picture/nicole.png" },
 ];
 
 const pageNavigation = [
@@ -133,12 +133,9 @@ export default async function HomePage() {
             <div className="mt-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
               {developers.map((developer) => (
                 <article key={developer.name} className="group overflow-hidden rounded-3xl border border-border/80 bg-card shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-xl hover:shadow-primary/5">
-                  <div className={`relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-gradient-to-br ${developer.tone}`}>
-                    <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(255,255,255,0.55),transparent_46%)] dark:bg-[radial-gradient(circle_at_50%_42%,rgba(255,255,255,0.12),transparent_46%)]" />
-                    <div aria-hidden="true" className="absolute -right-12 -top-14 size-40 rounded-full border border-white/30 bg-white/10 transition-transform duration-500 group-hover:scale-110" />
-                    <div aria-hidden="true" className="absolute -bottom-20 -left-12 size-48 rounded-full border border-white/30 bg-white/10" />
-                    <div className="relative size-36 rounded-full bg-gradient-to-br from-white/90 via-primary/70 to-cyan-400/80 p-1 shadow-2xl shadow-slate-950/25 transition-transform duration-300 group-hover:scale-[1.04] sm:size-40">
-                      <div className="relative size-full overflow-hidden rounded-full border-[3px] border-background/90 bg-white ring-1 ring-white/80">
+                  <div className="flex aspect-[4/3] items-center justify-center bg-card">
+                    <div className="relative size-36 rounded-full border border-border bg-white p-1 shadow-md transition-transform duration-300 group-hover:scale-[1.04] sm:size-40">
+                      <div className="relative size-full overflow-hidden rounded-full bg-white">
                         <Image src={developer.image} alt={`${developer.name} portrait`} fill sizes="(max-width: 640px) 144px, 160px" className="object-cover object-[center_38%]" />
                       </div>
                     </div>
