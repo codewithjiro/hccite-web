@@ -15,7 +15,15 @@ const openAlexWorkSchema = z.object({
   abstract_inverted_index: z.record(z.string(), z.array(z.number().int())).nullable().optional(),
   open_access: z.object({ is_oa: z.boolean(), oa_url: z.string().nullable().optional(), any_repository_has_fulltext: z.boolean().optional() }).passthrough().nullable().optional(),
 }).passthrough();
-const responseSchema = z.object({ meta: z.object({ count: z.number().int().nonnegative(), page: z.number().int().optional(), per_page: z.number().int().optional() }).passthrough(), results: z.array(openAlexWorkSchema) }).passthrough();
+const responseEnvelopeSchema = z.object({ meta: z.object({ count: z.number().int().nonnegative(), page: z.number().int().positive().optional(), per_page: z.number().int().positive().optional() }).passthrough(), results: z.array(z.unknown()) }).passthrough();
+
+function logValidationIssues(scope: string, issues: z.ZodIssue[], resultIndex?: number) {
+  console.warn("OpenAlex validation failed", JSON.stringify({
+    scope,
+    ...(resultIndex === undefined ? {} : { resultIndex }),
+    issues: issues.map((issue) => ({ path: issue.path, code: issue.code, ...(issue.code === "invalid_type" ? { expected: issue.expected } : {}) })),
+  }));
+}
 
 function reconstructAbstract(index: Record<string, number[]> | null | undefined): string | null {
   if (!index) return null;
@@ -47,7 +55,7 @@ export async function getOpenAlexWorkById(input: string, options: { fetcher?: ty
   url.searchParams.set("api_key", apiKey);
   const payload = await providerJson<unknown>("openalex", url, undefined, options.fetcher);
   const work = openAlexWorkSchema.safeParse(payload);
-  if (!work.success) throw new ProviderError("openalex", "malformed_response", "OpenAlex response did not match the expected work format.");
+  if (!work.success) { logValidationIssues("work", work.error.issues); throw new ProviderError("openalex", "malformed_response", "OpenAlex response did not match the expected work format."); }
   let resource: NormalizedResource;
   try { resource = mapWork(work.data, new Date()); }
   catch { throw new ProviderError("openalex", "malformed_response", "OpenAlex work has unusable metadata."); }
@@ -67,8 +75,24 @@ export async function searchOpenAlex(query: string, page: number, options: { fet
   if (filters.length) url.searchParams.set("filter", filters.join(","));
   url.searchParams.set("select", "id,display_name,authorships,publication_year,publication_date,doi,type,primary_location,abstract_inverted_index,open_access");
   const payload = await providerJson<unknown>("openalex", url, undefined, options.fetcher);
-  const parsed = responseSchema.safeParse(payload);
-  if (!parsed.success) throw new ProviderError("openalex", "malformed_response", "OpenAlex response did not match the expected works format.");
+  const parsed = responseEnvelopeSchema.safeParse(payload);
+  if (!parsed.success) { logValidationIssues("envelope", parsed.error.issues); throw new ProviderError("openalex", "malformed_response", "OpenAlex response did not match the expected works format."); }
   const retrievedAt = new Date();
-  return { items: parsed.data.results.map((work) => mapWork(work, retrievedAt)), page, total: parsed.data.meta.count, hasMore: page * (parsed.data.meta.per_page ?? 20) < parsed.data.meta.count };
+  const items: NormalizedResource[] = [];
+  let skipped = 0;
+  parsed.data.results.forEach((candidate, index) => {
+    const work = openAlexWorkSchema.safeParse(candidate);
+    if (!work.success) { logValidationIssues("work", work.error.issues, index); skipped += 1; return; }
+    try {
+      const resource = mapWork(work.data, retrievedAt);
+      if (!resource.sourceIdentifier) throw new Error("invalid identity");
+      items.push(resource);
+    } catch {
+      console.warn("OpenAlex validation failed", { scope: "mapping", resultIndex: index, issues: [{ path: ["results", index], code: "unusable_metadata" }] });
+      skipped += 1;
+    }
+  });
+  if (parsed.data.results.length > 0 && items.length === 0) throw new ProviderError("openalex", "malformed_response", "OpenAlex returned no usable works.");
+  return { items, page, total: parsed.data.meta.count, hasMore: page * (parsed.data.meta.per_page ?? 20) < parsed.data.meta.count,
+    warnings: skipped ? [{ provider: "openalex" as const, code: "partial_records", message: `${skipped} OpenAlex record${skipped === 1 ? " was" : "s were"} skipped because its metadata could not be parsed.`, retryable: false }] : [] };
 }

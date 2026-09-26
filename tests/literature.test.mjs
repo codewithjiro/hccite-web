@@ -6,6 +6,7 @@ const { deriveLiteratureQueries, literatureQuerySchema, literatureQueriesSchema,
 const { searchLiterature } = await import("../src/server/literature/search.ts");
 const { explainRelevance } = await import("../src/server/literature/relevance.ts");
 const { ProviderError } = await import("../src/server/discovery/providers/shared.ts");
+const { literatureEmptyState } = await import("../src/components/literature-search-state.ts");
 
 const profile = { title: "Learning study", summary: "Synthetic fixture", researchProblem: "How does online learning affect engagement?", objectives: ["Measure student engagement"], keywords: ["online learning", "engagement"], methodology: "survey", variablesOrConcepts: ["student engagement", "digital education"], suggestedQueries: ["online learning student engagement", "online learning student engagement"] };
 const resource = (overrides = {}) => ({ type: "article", title: "Digital learning and engagement", authors: ["A. Author"], year: 2024, publicationDate: "2024", doi: "10.1234/example", isbn: null, publisher: null, venue: "Journal", source: "openalex", sourceIdentifier: "W123", url: "https://openalex.org/W123", abstract: "This abstract discusses digital learning and student engagement.", retrievedAt: new Date("2026-01-01"), citationMetadata: { provider: "openalex" }, ...overrides });
@@ -44,6 +45,22 @@ test("an empty real-provider response stays empty and never invokes Gemini", asy
   const result = await searchLiterature("deliberately narrow synthetic query", { openAlex: async () => ({ items: [], total: 0 }), googleBooks: async () => { geminiCalls++; return { items: [], total: 0 }; }, crossref: async () => { throw new Error("must not enrich an absent DOI"); } });
   assert.deepEqual(result.items, []);
   assert.equal(geminiCalls, 0);
+});
+
+test("literature distinguishes provider failure from a confirmed empty search", async () => {
+  const failed = await searchLiterature("handwritten code recognition", { openAlex: async () => { throw new ProviderError("openalex", "malformed_response", "OpenAlex returned no usable works."); }, googleBooks: async () => { throw new Error("unexpected"); }, crossref: async () => { throw new Error("unexpected"); } });
+  assert.deepEqual(failed.items, []);
+  assert.equal(failed.warnings[0].code, "malformed_response");
+  assert.equal(literatureEmptyState(true, false, failed.items.length, failed.warnings.length, false), "unavailable");
+  assert.equal(literatureEmptyState(true, false, 0, 0, false), "no_matches");
+  assert.equal(literatureEmptyState(true, false, 0, 0, true), "unavailable");
+});
+
+test("literature carries OpenAlex partial-record warnings with valid results", async () => {
+  const result = await searchLiterature("handwritten code recognition", { openAlex: async () => ({ items: [resource({ doi: null })], total: 2, warnings: [{ provider: "openalex", code: "partial_records", message: "1 OpenAlex record was skipped because its metadata could not be parsed.", retryable: false }] }), googleBooks: async () => { throw new Error("unexpected"); }, crossref: async () => { throw new Error("unexpected"); } });
+  assert.equal(result.items.length, 1);
+  assert.equal(result.warnings[0].code, "partial_records");
+  assert.equal(literatureEmptyState(true, false, result.items.length, result.warnings.length, false), null);
 });
 
 test("Gemini relevance is validated, title-only must be tentative, and failure creates no resource", async () => {

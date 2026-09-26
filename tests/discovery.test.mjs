@@ -66,6 +66,27 @@ test("OpenAlex validates work responses and reports 429 without retry", async ()
   await assert.rejects(searchOpenAlex("x", 1, { apiKey: "fixture-only", fetcher: async () => new Response("{}", { status: 200 }) }), (error) => error.code === "malformed_response");
 });
 
+test("OpenAlex keeps valid works when one selected record has malformed nested metadata", async () => {
+  const valid = { id: "https://openalex.org/W123", display_name: "Handwritten code recognition", authorships: [], primary_location: null, open_access: { is_oa: false } };
+  const response = { meta: { count: 3, page: 1, per_page: 20 }, results: [valid, { ...valid, id: "https://openalex.org/W456", primary_location: { source: { display_name: 42 } } }, { ...valid, id: "https://openalex.org/W789" }] };
+  let requested;
+  const result = await searchOpenAlex("handwritten code recognition", 1, { apiKey: "fixture", fetcher: async (input) => { requested = new URL(input); return Response.json(response); } });
+  assert.equal(requested.searchParams.get("search"), "handwritten code recognition");
+  assert.deepEqual(result.items.map((item) => item.sourceIdentifier), ["W123", "W789"]);
+  assert.equal(result.total, 3);
+  assert.equal(result.warnings[0].code, "partial_records");
+});
+
+test("OpenAlex distinguishes malformed envelopes, unusable pages, and genuine zero results", async () => {
+  const fetcher = (payload) => async () => Response.json(payload);
+  await assert.rejects(searchOpenAlex("x", 1, { apiKey: "fixture", fetcher: fetcher({ meta: { count: 1 }, results: {} }) }), (error) => error instanceof ProviderError && error.code === "malformed_response");
+  await assert.rejects(searchOpenAlex("x", 1, { apiKey: "fixture", fetcher: fetcher({ meta: { count: 1 }, results: [{ display_name: "Missing identity" }] }) }), (error) => error instanceof ProviderError && error.code === "malformed_response");
+  const empty = await searchOpenAlex("rare topic", 1, { apiKey: "fixture", fetcher: fetcher({ meta: { count: 0, page: 1, per_page: 20 }, results: [] }) });
+  assert.deepEqual(empty.items, []);
+  assert.deepEqual(empty.warnings, []);
+  assert.equal(empty.total, 0);
+});
+
 test("OpenAlex reads its server environment at request time and never returns the key", async () => {
   const previous = process.env.OPENALEX_API_KEY;
   process.env.OPENALEX_API_KEY = "fixture-server-key";

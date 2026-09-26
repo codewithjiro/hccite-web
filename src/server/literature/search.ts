@@ -13,7 +13,7 @@ const warning = (provider: LiteratureWarning["provider"], error: unknown): Liter
 export async function searchLiterature(input: unknown, dependencies = { openAlex: searchOpenAlex, googleBooks: searchGoogleBooks, crossref: lookupCrossrefDoi }) {
   const query = literatureQuerySchema.parse(input);
   const warnings: LiteratureWarning[] = [];
-  const scholarly = await dependencies.openAlex(query, 1).then((r) => r.items).catch((e) => { warnings.push(warning("openalex", e)); return [] as NormalizedResource[]; });
+  const scholarly = await dependencies.openAlex(query, 1).then((r) => { warnings.push(...(r.warnings ?? [])); return r.items; }).catch((e) => { warnings.push(warning("openalex", e)); return [] as NormalizedResource[]; });
   const books = isBookRelevant(query)
     ? await dependencies.googleBooks(query, 0).then((r) => r.items).catch((e) => { warnings.push(warning("google_books", e)); return [] as NormalizedResource[]; })
     : [];
